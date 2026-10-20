@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "dev/Hieuthu3"]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      # The high-fidelity capture tests drive a real headless Chromium.
+      - run: npx playwright install --with-deps chromium
+
+      - run: npm run build
+
+      - name: Committed dist matches the sources
+        run: git diff --exit-code -- dist figma-sim.html || (echo "::error::dist/ is stale. Run npm run build and commit the result." && exit 1)
+
+      - run: npm test

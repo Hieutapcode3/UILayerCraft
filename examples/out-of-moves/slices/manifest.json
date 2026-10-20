@@ -1,0 +1,343 @@
+{
+  "version": "1.0.0",
+  "exportedAt": "2026-10-19T17:17:38.983Z",
+  "sourcePrompt": "source.jpg",
+  "selectedImageIndex": 1,
+  "screen": {
+    "name": "source.jpg",
+    "width": 1480,
+    "height": 1920
+  },
+  "assets": [
+    {
+      "id": "slice_ai_decompose_background_mvfio6z1_4em69h8_1",
+      "name": "settings_gear_icon",
+      "filename": "assets/settings_gear_icon.png",
+      "svgFilename": null,
+      "format": "png",
+      "formats": [
+        "png"
+      ],
+      "transparent": false,
+      "aiTransparent": false,
+      "aiRedrawn": false,
+      "hasOriginalRaster": true,
+      "selectedImageIndex": 1,
+      "radius": 0,
+      "placement": {
+        "x": 222,
+        "y": 90,
+        "width": 100,
+        "height": 100
+      }
+    },
+    {
+      "id": "slice_ai_decompose_background_mvfio6z1_4em69h8_2",
+      "name": "gold_coin_icon",
+      "filename": "assets/gold_coin_icon.png",
+      "svgFilename": null,
+      "format": "png",
+      "formats": [
+        "png"
+      ],
+      "transparent": false,
+      "aiTransparent": false,
+      "aiRedrawn": false,
+      "hasOriginalRaster": true,
+      "selectedImageIndex": 1,
+      "radius": 0,
+      "placement": {
+        "x": 1174,
+        "y": 94,
+        "width": 90,
+        "height": 94
+      }
+    },
+    {
+      "id": "slice_ai_decompose_background_mvfio6z1_4em69h8_3",
+      "name": "close_button_red_x_icon",
+      "filename": "assets/close_button_red_x_icon.png",
+      "svgFilename": null,
+      "format": "png",
+      "formats": [
+        "png"
+      ],
+      "transparent": false,
+      "aiTransparent": false,
+      "aiRedrawn": false,
+      "hasOriginalRaster": true,
+      "selectedImageIndex": 1,
+      "radius": 0,
+      "placement": {
+        "x": 1024,
+        "y": 392,
+        "width": 130,
+        "height": 128
+      }
+    },
+    {
+      "id": "slice_ai_decompose_background_mvfio6z1_4em69h8_4",
+      "name": "out_of_moves_title_lettering",
+      "filename": "assets/out_of_moves_title_lettering.png",
+      "svgFilename": null,
+      "format": "png",
+      "formats": [
+        "png"
+      ],
+      "transparent": false,
+      "aiTransparent": false,
+      "aiRedrawn": false,
+      "hasOriginalRaster": true,
+      "selectedImageIndex": 1,
+      "radius": 0,
+      "placement": {
+        "x": 434,
+        "y": 568,
+        "width": 628,
+        "height": 86
+      }
+    },
+    {
+      "id": "slice_ai_decompose_background_mvfio6z1_4em69h8_5",
+      "name": "glow_rays_decoration",
+      "filename": "assets/glow_rays_decoration.png",
+      "svgFilename": null,
+      "format": "png",
+      "formats": [
+        "png"
+      ],
+      "transparent": false,
+      "aiTransparent": false,
+      "aiRedrawn": false,
+      "hasOriginalRaster": true,
+      "selectedImageIndex": 1,
+      "radius": 0,
+      "placement": {
+        "x": 528,
+        "y": 704,
+        "width": 430,
+        "height": 170
+      }
+    },
+    {
+      "id": "slice_ai_decompose_background_mvfio6z1_4em69h8_6",
+      "name": "blue_swap_moves_icon_with_zero_badge",
+      "filename": "assets/blue_swap_moves_icon_with_zero_badge.png",
+      "svgFilename": null,
+      "format": "png",
+      "formats": [
+        "png"
+      ],
+      "transparent": false,
+      "aiTransparent": false,
+      "aiRedrawn": false,
+      "hasOriginalRaster": true,
+      "selectedImageIndex": 1,
+      "radius": 0,
+      "placement": {
+        "x": 620,
+        "y": 676,
+        "width": 262,
+        "height": 234
+      }
+    },
+    {
+      "id": "slice_ai_decompose_background_mvfio6z1_4em69h8_7",
+      "name": "green_swap_moves_booster_icon",
+      "filename": "assets/green_swap_moves_booster_icon.png",
+      "svgFilename": null,
+      "format": "png",
+      "formats": [
+        "png"
+      ],
+      "transparent": false,
+      "aiTransparent": false,
+      "aiRedrawn": false,
+      "hasOriginalRaster": true,
+      "selectedImageIndex": 1,
+      "radius": 0,
+      "placement": {
+        "x": 444,
+        "y": 1014,
+        "width": 98,
+        "height": 96
+      }
+    },
+    {
+      "id": "slice_ai_decompose_background_mvfio6z1_4em69h8_8",
+      "name": "magnifier_quick_hint_icon",
+      "filename": "assets/magnifier_quick_hint_icon.png",
+      "svgFilename": null,
+      "format": "png",
+      "formats": [
+        "png"
+      ],
+      "transparent": false,
+      "aiTransparent": false,
+      "aiRedrawn": false,
+      "hasOriginalRaster": true,
+      "selectedImageIndex": 1,
+      "radius": 0,
+      "placement": {
+        "x": 760,
+        "y": 1010,
+        "width": 84,
+        "height": 102
+      }
+    },
+    {
+      "id": "slice_ai_decompose_background_mvfio6z1_4em69h8_9",
+      "name": "video_clapperboard_ad_icon",
+      "filename": "assets/video_clapperboard_ad_icon.png",
+      "svgFilename": null,
+      "format": "png",
+      "formats": [
+        "png"
+      ],
+      "transparent": false,
+      "aiTransparent": false,
+      "aiRedrawn": false,
+      "hasOriginalRaster": true,
+      "selectedImageIndex": 1,
+      "radius": 0,
+      "placement": {
+        "x": 656,
+        "y": 1154,
+        "width": 70,
+        "height": 66
+      }
+    },
+    {
+      "id": "slice_ai_decompose_background_mvfio6z1_4em69h8_10",
+      "name": "button_gold_coin_icon",
+      "filename": "assets/button_gold_coin_icon.png",
+      "svgFilename": null,
+      "format": "png",
+      "formats": [
+        "png"
+      ],
+      "transparent": false,
+      "aiTransparent": false,
+      "aiRedrawn": false,
+      "hasOriginalRaster": true,
+      "selectedImageIndex": 1,
+      "radius": 0,
+      "placement": {
+        "x": 804,
+        "y": 1228,
+        "width": 60,
+        "height": 60
+      }
+    },
+    {
+      "id": "slice_ai_decompose_background_mvfio6z1_4em69h8_11",
+      "name": "school_bus_tile_illustration",
+      "filename": "assets/school_bus_tile_illustration.png",
+      "svgFilename": null,
+      "format": "png",
+      "formats": [
+        "png"
+      ],
+      "transparent": false,
+      "aiTransparent": false,
+      "aiRedrawn": false,
+      "hasOriginalRaster": true,
+      "selectedImageIndex": 1,
+      "radius": 0,
+      "placement": {
+        "x": 516,
+        "y": 1406,
+        "width": 134,
+        "height": 62
+      }
+    },
+    {
+      "id": "slice_ai_decompose_background_mvfio6z1_4em69h8_12",
+      "name": "airplane_tile_illustration",
+      "filename": "assets/airplane_tile_illustration.png",
+      "svgFilename": null,
+      "format": "png",
+      "formats": [
+        "png"
+      ],
+      "transparent": false,
+      "aiTransparent": false,
+      "aiRedrawn": false,
+      "hasOriginalRaster": true,
+      "selectedImageIndex": 1,
+      "radius": 0,
+      "placement": {
+        "x": 678,
+        "y": 1406,
+        "width": 144,
+        "height": 50
+      }
+    },
+    {
+      "id": "slice_ai_decompose_background_mvfio6z1_4em69h8_13",
+      "name": "magnifier_booster_icon",
+      "filename": "assets/magnifier_booster_icon.png",
+      "svgFilename": null,
+      "format": "png",
+      "formats": [
+        "png"
+      ],
+      "transparent": false,
+      "aiTransparent": false,
+      "aiRedrawn": false,
+      "hasOriginalRaster": true,
+      "selectedImageIndex": 1,
+      "radius": 0,
+      "placement": {
+        "x": 350,
+        "y": 1686,
+        "width": 134,
+        "height": 132
+      }
+    },
+    {
+      "id": "slice_ai_decompose_background_mvfio6z1_4em69h8_14",
+      "name": "star_card_booster_icon",
+      "filename": "assets/star_card_booster_icon.png",
+      "svgFilename": null,
+      "format": "png",
+      "formats": [
+        "png"
+      ],
+      "transparent": false,
+      "aiTransparent": false,
+      "aiRedrawn": false,
+      "hasOriginalRaster": true,
+      "selectedImageIndex": 1,
+      "radius": 0,
+      "placement": {
+        "x": 556,
+        "y": 1692,
+        "width": 146,
+        "height": 130
+      }
+    },
+    {
+      "id": "slice_ai_decompose_background_mvfio6z1_4em69h8_15",
+      "name": "compass_booster_icon",
+      "filename": "assets/compass_booster_icon.png",
+      "svgFilename": null,
+      "format": "png",
+      "formats": [
+        "png"
+      ],
+      "transparent": false,
+      "aiTransparent": false,
+      "aiRedrawn": false,
+      "hasOriginalRaster": true,
+      "selectedImageIndex": 1,
+      "radius": 0,
+      "placement": {
+        "x": 782,
+        "y": 1678,
+        "width": 144,
+        "height": 146
+      }
+    }
+  ]
+}

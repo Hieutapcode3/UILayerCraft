@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>UILayerCraft</title>
+    <style>
+      /* __UI_STYLES__ */
+    </style>
+  </head>
+  <body>
+    <div id="startupGate" class="startup-gate" role="status" aria-live="polite">
+      <div class="startup-card">
+        <span class="startup-spinner" aria-hidden="true"></span>
+        <strong class="startup-title" data-i18n="startup_title">Connecting to Local Service</strong>
+        <span id="startupMessage" class="startup-message" data-i18n="startup_message">Checking 127.0.0.1:18787 and loading model configuration...</span>
+        <button id="startupRetry" class="startup-retry" type="button" hidden data-i18n="startup_retry">Reconnect</button>
+      </div>
+    </div>
+    <main class="shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span class="brand-title" data-i18n="brand_title">UILayerCraft</span>
+        </div>
+        <ol class="stepper" aria-label="Workflow">
+          <li class="step" data-step="1">
+            <span class="step-index" aria-hidden="true">1</span>
+            <span class="step-label" data-i18n="step_load">Load Image</span>
+          </li>
+          <li class="step" data-step="2">
+            <span class="step-index" aria-hidden="true">2</span>
+            <div class="import-action-group ai">
+              <button id="decomposeBackground" class="text-action place-action" type="button" disabled data-i18n="ai_slice">AI Slice</button>
+              <button class="import-help" type="button" aria-label="About AI Slice" data-import-help="Identify regular PNG slices and full key visual backgrounds in one go; regular slices are added directly to canvas, and backgrounds are generated after confirming boundaries" data-i18n-help="ai_slice_help">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M9.8 9a2.4 2.4 0 0 1 4.6 1c0 1.8-2.4 2-2.4 3.7"></path><path d="M12 17h.01"></path></svg>
+              </button>
+            </div>
+          </li>
+          <li class="step" data-step="3">
+            <span class="step-index" aria-hidden="true">3</span>
+            <div class="import-actions" aria-label="Import to Figma">
+              <div class="import-action-group">
+                <button id="placeSource" class="text-action place-action" type="button" disabled data-i18n="slice_import">Import Slices</button>
+                <button class="import-help" type="button" aria-label="About Slice Import" data-import-help="Import current background and slice assets directly into Figma" data-i18n-help="slice_import_help">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M9.8 9a2.4 2.4 0 0 1 4.6 1c0 1.8-2.4 2-2.4 3.7"></path><path d="M12 17h.01"></path></svg>
+                </button>
+              </div>
+              <div class="import-action-group ai">
+                <button id="placeAiLayers" class="text-action place-action" type="button" disabled data-i18n="ai_layer_import">AI Layer Import</button>
+                <button class="import-help" type="button" aria-label="About AI Layer Import" data-import-help='After confirming the slices, AI recognizes the text, layout and slice assets on the canvas and imports them as editable layers. Recognition accuracy depends on the "Settings"->"Image Understanding Model" capability' data-i18n-help="ai_layer_import_help">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M9.8 9a2.4 2.4 0 0 1 4.6 1c0 1.8-2.4 2-2.4 3.7"></path><path d="M12 17h.01"></path></svg>
+                </button>
+              </div>
+            </div>
+          </li>
+        </ol>
+        <div class="topbar-actions">
+          <button id="newWorkTrigger" class="new-work-trigger" type="button" data-i18n="new_work_trigger">Start New</button>
+          <button id="draftsTrigger" class="drafts-trigger" type="button" hidden data-i18n="drafts_trigger">History</button>
+          <button id="settingsTrigger" class="settings-trigger" type="button" aria-label="Open settings" data-i18n="settings_trigger" data-i18n-aria="settings_trigger">Settings</button>
+          <button id="exportFigmaFrameHtml" class="text-action place-action" type="button" aria-disabled="true" title="Please select a complete frame in Figma" data-i18n="export_figma_frame_html" data-i18n-title="export_figma_frame_html_hint">Export HTML</button>
+          <button id="windowToggle" class="window-toggle" type="button" aria-label="Collapse Window" title="Collapse Window" data-i18n-title="window_toggle_collapse" data-i18n-aria="window_toggle_collapse">−</button>
+        </div>
+      </header>
+
+      <section class="workspace">
+        <aside class="sidebar">
+          <nav class="tabs" aria-label="Generation mode" data-i18n-aria="mode_text_to_image">
+            <button class="tab active" type="button" data-mode="text-to-image">
+              <span data-i18n="mode_text_to_image">Text to Image</span>
+            </button>
+            <button class="tab" type="button" data-mode="image-to-image">
+              <span data-i18n="mode_image_to_image">Image to Image</span>
+            </button>
+          </nav>
+
+          <div class="controls">
+            <section class="section">
+              <div class="section-title" data-i18n="step_1_prompt">1. Enter Prompt</div>
+              <div class="prompt-box">
+                <textarea id="prompt" maxlength="1000" data-i18n-placeholder="prompt_placeholder"></textarea>
+                <div id="charCount" class="char-count">0 / 1000</div>
+                <div id="referenceSection" class="reference-strip hidden">
+                  <div id="referenceDrop" class="reference-drop">
+                    <input id="referenceImage" type="file" accept="image/png,image/jpeg,image/webp" multiple />
+                    <span id="uploadText" class="reference-empty">
+                      <strong data-i18n="upload_ref_headline">Paste image or click to upload</strong>
+                      <span data-i18n="upload_ref_subtext">Supports uploading multiple reference images or pasting them consecutively</span>
+                    </span>
+                    <div id="referenceChips" class="reference-chips"></div>
+                  </div>
+                  <div id="referencePopover" class="reference-popover">
+                    <div id="referencePopoverGrid" class="reference-popover-grid"></div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="section">
+              <div class="section-title" data-i18n="step_2_ratio">2. Aspect Ratio</div>
+              <div class="ratio-grid">
+                <button class="choice" type="button" data-ratio="1:1"><span class="choice-main">1:1</span><span class="choice-label" data-i18n="ratio_square">Square</span><span class="choice-size">1024px × 1024px</span></button>
+                <button class="choice" type="button" data-ratio="16:9"><span class="choice-main">16:9</span><span class="choice-label" data-i18n="ratio_landscape">Landscape</span><span class="choice-size">1920px × 1080px</span></button>
+                <button class="choice" type="button" data-ratio="4:3"><span class="choice-main">4:3</span><span class="choice-label" data-i18n="ratio_traditional">Traditional</span><span class="choice-size">1600px × 1200px</span></button>
+                <button class="choice" type="button" data-ratio="3:4"><span class="choice-main">3:4</span><span class="choice-label" data-i18n="ratio_portrait">Portrait</span><span class="choice-size">1200px × 1600px</span></button>
+                <button class="choice active" type="button" data-ratio="9:16"><span class="choice-main">9:16</span><span class="choice-label" data-i18n="ratio_phone">Mobile</span><span class="choice-size">750px × 1334px</span></button>
+                <button class="choice" type="button" data-ratio="custom"><span class="choice-main" data-i18n="ratio_custom">Custom</span><span class="choice-size" data-i18n="ratio_custom_hint">Enter custom dimensions</span></button>
+              </div>
+            </section>
+
+            <div class="generate-actions">
+              <button id="generate" class="generate" type="button" data-i18n="btn_ai_generate">Generate UI</button>
+              <span class="generate-or" data-i18n="or_separator">or</span>
+              <button id="uploadLocal" class="generate secondary" type="button" data-i18n="btn_local_image">Local Image</button>
+              <input id="localImage" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+            </div>
+          </div>
+
+          <section id="draftsPanel" class="drafts-panel" aria-label="History" data-i18n-aria="drafts_head">
+            <div class="drafts-head">
+              <strong data-i18n="drafts_head">History</strong>
+              <div class="drafts-head-actions">
+                <button id="draftsCopy" class="drafts-copy" type="button" data-i18n="drafts_copy">Duplicate</button>
+                <button id="draftsClose" class="drafts-close" type="button" aria-label="Close History" data-i18n-aria="drafts_close">×</button>
+              </div>
+            </div>
+            <div id="draftsList" class="drafts-list"></div>
+          </section>
+          <section id="settingsPanel" class="settings-panel model-settings-panel" aria-label="Model Settings" data-i18n-aria="settings_title">
+            <div class="settings-head">
+              <div><span data-i18n="settings_title">Model Settings</span><div id="apiConfigStatus" class="config-status"></div></div>
+              <div class="settings-head-actions">
+                <button id="newModelConfig" type="button" data-i18n="btn_new_api">+ New API</button>
+                <button id="settingsClose" class="settings-close" type="button" aria-label="Close Settings" data-i18n-aria="settings_close">×</button>
+              </div>
+            </div>
+            <div class="model-settings-content">
+              <section class="model-settings-section">
+                <div class="model-settings-section-head">
+                  <div><strong data-i18n="section_current_use">Active Routing</strong><small data-i18n="section_current_use_hint">Saves and applies immediately upon switching</small></div>
+                </div>
+                <div id="taskRoutingView" class="task-routing-view"></div>
+              </section>
+              <section class="model-settings-section">
+                <div class="model-settings-section-head">
+                  <div><strong data-i18n="section_model_api">Model APIs</strong><small data-i18n="section_model_api_hint">Create multiple connections and assign by purpose</small></div>
+                </div>
+                <div id="modelConfigList" class="model-config-list"></div>
+              </section>
+            </div>
+          </section>
+          <section id="modelConfigDialog" class="model-config-dialog" aria-hidden="true" aria-modal="true" aria-labelledby="modelConfigDialogTitle">
+            <div class="model-config-dialog-card" role="dialog">
+              <div class="model-config-dialog-head">
+                <strong id="modelConfigDialogTitle" data-i18n="dialog_new_api">New Model API</strong>
+                <button id="modelConfigDialogClose" type="button" aria-label="Close API Editor" data-i18n-aria="close_api_edit">×</button>
+              </div>
+              <div class="model-config-dialog-body">
+                <form id="modelConfigForm" class="model-config-form">
+                  <input id="modelConfigId" type="hidden" />
+                  <div class="model-config-form-grid">
+                    <label><span data-i18n="form_name">Note / Name (Optional)</span><input id="modelConfigName" type="text" autocomplete="off" placeholder="e.g.: Official OpenAI" data-i18n-placeholder="form_name_placeholder" /></label>
+                    <label><span data-i18n="form_base_url">Base URL</span><input id="modelConfigBaseUrl" type="url" placeholder="https://api.openai.com" required /></label>
+                    <label><span data-i18n="form_model">Model</span><div class="model-config-model-row"><input id="modelConfigModel" type="text" autocomplete="off" required aria-controls="modelConfigModelMenu" aria-expanded="false" /><button id="modelConfigModels" type="button" data-i18n="btn_fetch_models">Fetch Models</button><div id="modelConfigModelMenu" class="model-config-model-menu" role="listbox" hidden></div></div></label>
+                    <label><span data-i18n="form_timeout">Timeout (seconds)</span><input id="modelConfigTimeout" type="number" min="30" max="1800" step="1" value="500" /></label>
+                    <label><span data-i18n="form_api_key">API Key</span><div class="model-config-key-row"><input id="modelConfigApiKey" type="password" autocomplete="off" placeholder="sk-..." /><button id="modelConfigRevealKey" type="button" data-i18n="btn_show_key">Show</button></div></label>
+                  </div>
+                  <fieldset class="model-config-tasks"><legend data-i18n="legend_purpose">Purpose</legend><label><input type="radio" name="modelConfigPurpose" value="vision" checked />Vision Model</label><label><input type="radio" name="modelConfigPurpose" value="image" />Image Generation / Inpaint</label></fieldset>
+                  <div class="model-config-form-actions"><button id="modelConfigDelete" type="button" hidden data-i18n="btn_delete">Delete</button><button id="modelConfigTest" type="button" data-i18n="btn_test">Test</button><span></span><button class="confirm" type="submit" data-i18n="btn_save_apply">Save & Apply</button></div>
+                </form>
+              </div>
+            </div>
+          </section>
+        </aside>
+
+        <section class="main">
+          <div class="content">
+            <div id="resultGrid" class="result-view" aria-label="Generated results">
+              <div class="result-card"></div>
+            </div>
+          </div>
+          <div id="previewZoomControls" class="canvas-zoom-controls preview-zoom-controls" aria-label="Canvas Zoom" data-i18n-aria="canvas_zoom" hidden>
+            <button type="button" data-canvas-zoom="out" aria-label="Zoom Out" data-i18n-aria="zoom_out">−</button>
+            <button class="preview-zoom-value" type="button" data-canvas-zoom="reset" aria-label="Reset to 100%" data-i18n-aria="zoom_reset">100%</button>
+            <button type="button" data-canvas-zoom="in" aria-label="Zoom In" data-i18n-aria="zoom_in">+</button>
+            <button type="button" data-canvas-zoom="fit" data-i18n="zoom_fit">Fit to Screen</button>
+          </div>
+        </section>
+
+        <aside class="assets-panel">
+          <section id="cutSection" class="cut-section">
+            <div class="cut-head">
+              <div class="cut-title-row">
+                <h2 class="cut-title" data-i18n="cut_title">Slice asset</h2>
+                <span id="resultCount"></span>
+              </div>
+              <div class="cut-head-actions">
+                <button id="exportSlices" class="cut-batch" type="button" disabled data-i18n="export_slices">Export Slices</button>
+                <button id="transparentAll" class="cut-batch" type="button" disabled data-i18n="transparent_all">All Transparent</button>
+                <button id="toggleAllSlices" class="cut-batch" type="button" disabled data-i18n="toggle_all_slices_hide">Hide All</button>
+                <button id="repairPreview" class="cut-batch" type="button" disabled data-i18n="repair_preview">Preview Inpaint</button>
+              </div>
+            </div>
+            <div id="cutGrid" class="cut-grid"></div>
+          </section>
+        </aside>
+      </section>
+      <div id="status" class="status" role="status" aria-live="polite">
+        <span id="statusMessage" class="status-message"></span>
+        <button id="statusClose" class="status-close" type="button" aria-label="Close Notification">×</button>
+      </div>
+      <aside id="sliceSettingsDrawer" class="slice-settings-drawer" aria-hidden="true" aria-label="Slice Settings" data-i18n-aria="slice_settings_kicker">
+        <div class="slice-settings-head">
+          <div>
+            <div class="slice-settings-kicker" data-i18n="slice_settings_kicker">Slice Settings</div>
+            <strong id="sliceSettingsTitle" class="slice-settings-title">slice</strong>
+          </div>
+          <button id="sliceSettingsClose" class="slice-settings-close" type="button" aria-label="Close Slice Settings" data-i18n-aria="close_slice_settings">×</button>
+        </div>
+        <div id="sliceSettingsBody" class="slice-settings-body"></div>
+      </aside>
+      <div id="sliceImagePreview" class="slice-image-preview" aria-hidden="true" aria-label="Slice Editor" data-i18n-aria="slice_editor_aria">
+        <section class="slice-image-editor" role="dialog" aria-modal="true" aria-label="Edit Slice" data-i18n-aria="slice_editor_title">
+          <div class="slice-image-editor-viewport">
+            <div id="sliceImageEditorStage" class="slice-image-editor-stage">
+              <canvas id="sliceImageEditorBase"></canvas>
+              <canvas id="sliceImageEditorMask"></canvas>
+            </div>
+          </div>
+          <div class="slice-image-editor-toolbar">
+            <button class="slice-image-editor-tool active" type="button" data-slice-editor-tool="brush" aria-label="Brush" title="Brush" data-i18n-aria="tool_brush" data-i18n-title="tool_brush">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14.622 17.897-10.68-2.913"/><path d="M18.376 2.622a1 1 0 0 1 3.002 3.002L17.36 9.642a2 2 0 0 1-.683.437l-2.66.946a.5.5 0 0 1-.64-.64l.946-2.66a2 2 0 0 1 .437-.683z"/><path d="M9 8c-2.8 0-5 2.2-5 5 0 1.7.8 3.2 2 4.1C7.7 18.5 6.4 21 4 21c4.5 0 7-2.5 7-6 0-1.2-.4-2.3-1-3.2"/></svg>
+            </button>
+            <button class="slice-image-editor-tool" type="button" data-slice-editor-tool="eraser" aria-label="Eraser" title="Eraser" data-i18n-aria="tool_eraser" data-i18n-title="tool_eraser">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3a2.4 2.4 0 0 1 0-3.4L13.3 2.7a2.4 2.4 0 0 1 3.4 0l4.6 4.6a2.4 2.4 0 0 1 0 3.4L11 21"/><path d="m5 11 9 9"/><path d="M7 21h10"/></svg>
+            </button>
+            <label class="slice-image-editor-size">
+              <span data-i18n="tool_thickness">Size</span>
+              <input id="sliceImageEditorSize" type="range" min="1" max="200" value="24" />
+              <output id="sliceImageEditorSizeValue">24px</output>
+            </label>
+            <div class="slice-image-editor-actions">
+              <button id="sliceImageEditorComplete" class="slice-image-editor-action" type="button" disabled data-i18n="btn_ai_complete">AI Inpaint</button>
+              <button id="sliceImageEditorCancelAi" class="slice-image-editor-cancel-ai" type="button" aria-label="Cancel AI Inpaint" title="Cancel AI Inpaint" data-i18n-aria="btn_cancel_ai" data-i18n-title="btn_cancel_ai" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+              <button id="sliceImageEditorSave" class="slice-image-editor-action primary" type="button" disabled data-i18n="btn_save_to_slice">Save to Slice</button>
+            </div>
+          </div>
+          <button id="sliceImagePreviewClose" class="slice-image-preview-close" type="button" aria-label="Close" data-i18n-aria="btn_cancel">×</button>
+          <section id="sliceImageEditorUnsaved" class="slice-image-editor-unsaved" aria-label="Save Changes" data-i18n-aria="btn_save_changes" hidden>
+            <div class="slice-image-editor-unsaved-card">
+              <strong data-i18n="unsaved_title">Save Changes?</strong>
+              <p data-i18n="unsaved_desc">This slice contains unsaved image modifications.</p>
+              <div class="slice-image-editor-unsaved-actions">
+                <button id="sliceImageEditorCancelClose" type="button" data-i18n="btn_cancel">Cancel</button>
+                <button id="sliceImageEditorDiscard" type="button" data-i18n="btn_discard">Don't Save</button>
+                <button id="sliceImageEditorConfirmSave" class="confirm" type="button" data-i18n="btn_save_changes">Save Changes</button>
+              </div>
+            </div>
+          </section>
+        </section>
+      </div>
+      <div id="importHelpPopover" class="import-help-popover" role="dialog" hidden></div>
+      <section id="workspaceRestoreDialog" class="place-dialog" aria-modal="true" aria-label="Restore Previous Work" data-i18n-aria="btn_restore_work">
+        <div class="place-dialog-card">
+          <div class="place-dialog-head"><strong data-i18n="restore_work_title">Unfinished Work Found</strong></div>
+          <p class="hint workspace-restore-copy" data-i18n="restore_work_desc">Restore previous images, slice assets, and AI layer preview.</p>
+          <div class="workspace-restore-footer">
+            <label class="restore-preference"><input id="workspaceRestoreRemember" type="checkbox" /><span data-i18n="restore_remember">Don't remind again</span></label>
+            <div class="custom-size-actions">
+              <button id="workspaceDiscard" type="button" data-i18n="btn_start_new_work">Start New</button>
+              <button id="workspaceRestore" class="confirm" type="button" data-i18n="btn_restore_work">Restore Previous Work</button>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section id="customSizeDialog" class="place-dialog" aria-modal="true" aria-label="Custom image size" data-i18n-aria="custom_size_title">
+        <form id="customSizeForm" class="custom-size-card">
+          <div class="place-dialog-head">
+            <strong data-i18n="custom_size_title">Custom Size</strong>
+            <button id="customSizeClose" class="place-dialog-close" type="button" aria-label="Close" data-i18n-aria="btn_cancel">×</button>
+          </div>
+          <div class="custom-size-fields">
+            <label class="size-field" for="width">
+              <span data-i18n="custom_size_width">Width</span>
+              <span class="custom-size-input"><input id="width" type="number" min="256" max="4096" value="750" required /><span class="custom-size-unit">px</span></span>
+            </label>
+            <span class="link-icon">×</span>
+            <label class="size-field" for="height">
+              <span data-i18n="custom_size_height">Height</span>
+              <span class="custom-size-input"><input id="height" type="number" min="256" max="4096" value="1334" required /><span class="custom-size-unit">px</span></span>
+            </label>
+          </div>
+          <div class="hint" data-i18n="custom_size_hint">Supports 256–4096px</div>
+          <div class="custom-size-actions">
+            <button id="customSizeCancel" type="button" data-i18n="btn_cancel">Cancel</button>
+            <button class="confirm" type="submit" data-i18n="btn_confirm">Confirm</button>
+          </div>
+        </form>
+      </section>
+      <section id="recordNoteDialog" class="place-dialog" aria-modal="true" aria-label="Edit slice record note" data-i18n-aria="record_note_title">
+        <form id="recordNoteForm" class="place-dialog-card record-note-card">
+          <div class="place-dialog-head">
+            <strong data-i18n="record_note_title">Edit Note</strong>
+            <button id="recordNoteClose" class="place-dialog-close" type="button" aria-label="Close" data-i18n-aria="btn_cancel">×</button>
+          </div>
+          <input id="recordNoteInput" class="record-note-input" type="text" maxlength="80" placeholder="Enter a title for yourself" data-i18n-placeholder="record_note_placeholder" />
+          <div class="custom-size-actions">
+            <button id="recordNoteCancel" type="button" data-i18n="btn_cancel">Cancel</button>
+            <button class="confirm" type="submit" data-i18n="btn_confirm">Confirm</button>
+          </div>
+        </form>
+      </section>
+      <section id="globalLoadingDialog" class="editable-preview-loading-dialog global-loading-dialog" aria-hidden="true" aria-modal="true" aria-labelledby="globalLoadingTitle">
+        <div class="editable-preview-loading-card" role="dialog">
+          <div class="editable-preview-loading-spinner" aria-hidden="true"></div>
+          <strong id="globalLoadingTitle" data-i18n="loading_processing">Processing...</strong>
+        </div>
+      </section>
+          <section id="editablePreviewLoadingDialog" class="editable-preview-loading-dialog" aria-hidden="true" aria-modal="true" aria-labelledby="editablePreviewLoadingTitle">
+            <div class="editable-preview-loading-card" role="dialog">
+              <div class="editable-preview-loading-spinner" aria-hidden="true"></div>
+              <strong id="editablePreviewLoadingTitle" data-i18n="loading_ai_layer">Importing AI Layers</strong>
+              <span id="editablePreviewLoadingDescription" class="editable-preview-loading-description" data-i18n="loading_ai_layer_desc">Preparing to request vision model to analyze text, layout, and slice assets…</span>
+              <span id="editablePreviewElapsed" class="editable-preview-elapsed">Elapsed 0s</span>
+              <div class="editable-preview-loading-actions">
+                <button id="editablePreviewRetry" class="editable-preview-retry" type="button" hidden data-i18n="btn_retry">Retry</button>
+                <button id="editablePreviewCancel" class="editable-preview-cancel" type="button" data-i18n="btn_cancel">Cancel</button>
+              </div>
+            </div>
+          </section>
+      <section id="backgroundDecompositionLoadingDialog" class="editable-preview-loading-dialog" aria-hidden="true" aria-modal="true" aria-labelledby="backgroundDecompositionLoadingTitle">
+        <div class="editable-preview-loading-card" role="dialog">
+          <div class="editable-preview-loading-spinner" aria-hidden="true"></div>
+          <strong id="backgroundDecompositionLoadingTitle" data-i18n="loading_ai_decomp">AI Slicing in Progress</strong>
+          <span id="backgroundDecompositionLoadingDescription" class="editable-preview-loading-description" data-i18n="loading_ai_decomp_desc">Identifying regular slices, full background, and overlay elements…</span>
+          <span id="backgroundDecompositionElapsed" class="editable-preview-elapsed">Elapsed 0s</span>
+          <button id="backgroundDecompositionLoadingCancel" class="editable-preview-cancel" type="button" data-i18n="btn_cancel">Cancel</button>
+        </div>
+      </section>
+      <section id="backgroundDecompositionDialog" class="background-decomposition-dialog" aria-hidden="true" aria-modal="true" aria-labelledby="backgroundDecompositionTitle">
+        <div class="background-decomposition-card" role="dialog">
+          <header class="background-decomposition-head">
+            <div class="background-decomposition-title">
+              <div>
+                <strong data-i18n="bg_confirm_title" id="backgroundDecompositionTitle">Select Background to Restore</strong>
+                <span data-i18n="bg_confirm_desc">Blue box is the full background; red boxes will be removed from the background. Stylized text, illustrations, and integrated branding are preserved by default.</span>
+              </div>
+              <div id="backgroundDecompositionZoomControls" class="canvas-zoom-controls html-preview-zoom-controls" aria-label="Canvas Zoom" data-i18n-aria="bg_zoom_aria">
+                <button type="button" data-canvas-zoom="out" aria-label="Zoom Out" data-i18n-aria="zoom_out">−</button>
+                <button class="html-preview-zoom-value" type="button" data-canvas-zoom="reset" aria-label="Reset to 100%" data-i18n-aria="zoom_reset">100%</button>
+                <button type="button" data-canvas-zoom="in" aria-label="Zoom In" data-i18n-aria="zoom_in">+</button>
+                <button class="html-preview-zoom-fit" type="button" data-canvas-zoom="fit" data-i18n="zoom_fit">Fit to Screen</button>
+              </div>
+            </div>
+            <div class="background-decomposition-head-actions">
+              <button id="backgroundDecompositionRegenerate" type="button" data-i18n="btn_regenerate_ai">Re-analyze with AI</button>
+              <button id="backgroundDecompositionClose" class="background-decomposition-close" type="button" aria-label="Close" data-i18n-aria="btn_cancel">×</button>
+            </div>
+          </header>
+          <div class="background-decomposition-body">
+            <div id="backgroundDecompositionViewport" class="background-decomposition-viewport">
+              <div id="backgroundDecompositionSizer" class="background-decomposition-sizer">
+                <div id="backgroundDecompositionStage" class="background-decomposition-stage">
+                  <img id="backgroundDecompositionImage" alt="" />
+                  <div id="backgroundDecompositionLayer" class="background-decomposition-layer"></div>
+                </div>
+              </div>
+            </div>
+            <aside id="backgroundDecompositionList" class="background-decomposition-list"></aside>
+          </div>
+          <footer class="background-decomposition-footer">
+            <span id="backgroundDecompositionSummary"></span>
+            <div>
+              <button id="backgroundDecompositionCancel" type="button" data-i18n="btn_cancel">Cancel</button>
+              <button id="backgroundDecompositionGenerate" class="confirm" type="button" data-i18n="btn_generate_full_bg">Generate Full Background</button>
+            </div>
+          </footer>
+        </div>
+      </section>
+      <section id="htmlPreviewDialog" class="html-preview-dialog" aria-modal="true" aria-label="AI Layer Import Preview" data-i18n-aria="ai_preview_title">
+        <div class="html-preview-card">
+          <div class="html-preview-head">
+            <div class="html-preview-title">
+              <strong data-i18n="ai_preview_title">AI Layer Import Preview</strong>
+              <div id="htmlPreviewZoomControls" class="canvas-zoom-controls html-preview-zoom-controls" aria-label="Preview Zoom" data-i18n-aria="preview_zoom_aria">
+                <button type="button" data-canvas-zoom="out" aria-label="Zoom Out" data-i18n-aria="zoom_out">−</button>
+                <button class="html-preview-zoom-value" type="button" data-canvas-zoom="reset" aria-label="Reset to 100%" data-i18n-aria="zoom_reset">100%</button>
+                <button type="button" data-canvas-zoom="in" aria-label="Zoom In" data-i18n-aria="zoom_in">+</button>
+                <button class="html-preview-zoom-fit" type="button" data-canvas-zoom="fit" data-i18n="zoom_fit">Fit to Screen</button>
+              </div>
+            </div>
+            <div class="html-preview-actions">
+              <button id="htmlPreviewRegenerate" class="html-preview-regenerate" type="button" data-i18n="btn_regenerate_ai">Re-analyze with AI</button>
+              <button id="htmlPreviewDownload" class="html-preview-download" type="button" data-i18n="btn_download_html">Download HTML</button>
+              <div id="htmlPreviewImportSettingsGroup" class="html-preview-import-settings-group">
+                <button id="htmlPreviewImport" class="html-preview-import" type="button" data-i18n="btn_import_figma">Import Design to Figma</button>
+                <button id="htmlPreviewImportSettings" class="html-preview-import-settings" type="button" aria-label="Import Settings" data-i18n-aria="import_settings" aria-haspopup="dialog" aria-expanded="false">
+                  <svg class="html-preview-import-settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.16.38.37.72.6 1 .3.36.7.57 1.1.6h.1v4h-.09c-.42.03-.82.24-1.11.6-.23.28-.44.62-.6 1Z"></path>
+                  </svg>
+                </button>
+                <div id="htmlPreviewImportSettingsPopover" class="html-preview-import-settings-popover" role="dialog" aria-label="Figma import settings" data-i18n-aria="import_settings" hidden>
+                  <label class="html-preview-import-settings-option">
+                    <input id="htmlPreviewHighFidelityCapture" type="checkbox" />
+                    <span>
+                      <strong data-i18n="high_fidelity_capture">High-fidelity capture (Playwright/CDP)</strong>
+                      <small data-i18n="high_fidelity_desc">Completes pseudo-elements, filters, clipping, and complex backgrounds.</small>
+                    </span>
+                  </label>
+                </div>
+              </div>
+              <button id="htmlPreviewClose" class="html-preview-close" type="button" aria-label="Close" data-i18n-aria="btn_cancel">×</button>
+            </div>
+          </div>
+          <div id="htmlPreviewBody" class="html-preview-body">
+            <div id="htmlPreviewViewport" class="html-preview-viewport">
+              <div id="htmlPreviewStage" class="html-preview-stage">
+                <div id="htmlPreviewSizer" class="html-preview-sizer">
+                  <iframe id="htmlPreviewFrame" class="html-preview-frame" title="AI Layer Import Preview" data-i18n-title="ai_preview_title"></iframe>
+                </div>
+              </div>
+              <div id="htmlPreviewInspectorHighlight" class="html-preview-inspector-highlight" hidden>
+                <span id="htmlPreviewInspectorHighlightLabel"></span>
+              </div>
+            </div>
+            <div id="htmlPreviewInspectorResize" class="html-preview-inspector-resize" role="separator" aria-label="Resize Inspector Width" data-i18n-aria="resize_inspector_width" aria-orientation="vertical" tabindex="0"></div>
+            <aside id="htmlPreviewInspector" class="html-preview-inspector" aria-label="Layout Inspector" data-i18n-aria="inspector_aria">
+              <div class="html-preview-inspector-head">
+                <div class="html-preview-inspector-heading">
+                  <strong data-i18n="inspector_elements">Elements</strong>
+                  <span data-i18n="inspector_elements_hint">Select to delete generated elements</span>
+                </div>
+                <div class="html-preview-inspector-actions">
+                  <button id="htmlPreviewInspectorDelete" class="danger" type="button" disabled data-i18n="btn_delete">Delete</button>
+                </div>
+              </div>
+              <div id="htmlPreviewInspectorTree" class="html-preview-inspector-tree">
+                <div class="html-preview-inspector-empty" data-i18n="inspector_waiting">Waiting for preview content</div>
+              </div>
+              <section id="htmlPreviewInspectorDetails" class="html-preview-inspector-details" aria-label="Element layout" data-i18n-aria="inspector_layout">
+                <div class="html-preview-inspector-section-title" data-i18n="inspector_layout">Layout</div>
+                <div class="html-preview-inspector-empty" data-i18n="inspector_select_element">Select an element to view layout</div>
+              </section>
+            </aside>
+          </div>
+        </div>
+      </section>
+      <div id="windowResizer" class="window-resizer" title="Drag to resize window" data-i18n-title="window_resizer" aria-hidden="true"></div>
+    </main>
+
+    <!-- WEB_TO_FIGMA_CAPTURE_RUNTIME_START -->
+    <script id="webToFigmaCaptureRuntime" type="text/plain">
+/* __WEB_TO_FIGMA_CAPTURE_RUNTIME__ */
+
+    </script>
+    <!-- WEB_TO_FIGMA_CAPTURE_RUNTIME_END -->
+    <script>
+/* __UI_VENDOR_SCRIPTS__ */
+    </script>
+    <script>
+/* __UI_APP_SCRIPT__ */
+    </script>
+  </body>
+</html>

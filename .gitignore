@@ -1,0 +1,14 @@
+.local-provider-config.json
+.uilayercraft-history/
+.image-to-slice-history/
+.env
+.env.local
+node_modules/
+.DS_Store
+*.log
+dist/*
+!dist/code.js
+!dist/figma-sim.js
+!dist/ui.html
+.idea
+.vscode/
