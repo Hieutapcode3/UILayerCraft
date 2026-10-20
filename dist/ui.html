@@ -2978,10 +2978,10 @@
 
       .cut-item {
         display: grid;
-        grid-template-columns: 42px minmax(44px, 1fr) minmax(44px, 1fr) 28px 52px 24px;
+        grid-template-columns: 18px 42px minmax(44px, 1fr) minmax(44px, 1fr) 28px 52px 24px;
         grid-template-areas:
-          "thumb meta meta meta meta meta"
-          "thumb transparent svg visibility settings remove";
+          "handle thumb meta meta meta meta meta"
+          "handle thumb transparent svg visibility settings remove";
         gap: 6px;
         align-items: center;
         min-width: 0;
@@ -3618,17 +3618,24 @@
         outline: none;
       }
 
-      .cut-drop-indicator {
-        position: absolute;
-        right: 0;
-        left: 0;
-        z-index: 8;
-        height: 3px;
-        border-radius: 2px;
-        background: var(--brand);
-        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9);
-        pointer-events: none;
+      .cut-drag-handle {
+        grid-area: handle;
+        align-self: stretch;
+        display: grid;
+        place-items: center;
+        width: 18px;
+        padding: 0;
+        border: 0;
+        border-radius: 5px;
+        background: transparent;
+        color: var(--muted);
+        cursor: grab;
+        touch-action: none;
       }
+      .cut-drag-handle:hover { background: var(--line); color: var(--ink-2); }
+      .cut-drag-handle svg { width: 14px; height: 14px; }
+      .cut-item.dragging { position: relative; z-index: 2; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25); }
+      .cut-item.dragging .cut-drag-handle { cursor: grabbing; }
 
       .cut-item.reordered {
         animation: cut-item-reordered 240ms ease;
@@ -4534,6 +4541,10 @@
       .model-config-tasks { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 13px; padding: 0; border: 0; }
       .model-config-tasks legend { margin-bottom: 7px; color: var(--ink-2); font-size: 10px; font-weight: 760; }
       .model-config-tasks label { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; }
+      .model-config-source { margin: 0 0 11px; }
+      .model-config-cli-hint { margin: 0 0 11px; color: var(--ink-2); font-size: 11px; }
+      .model-config-cli-hint[hidden],
+      .model-config-form-grid label[hidden] { display: none; }
       .task-route-title { display: inline-flex; align-items: center; gap: 5px; }
       .task-route-title .import-help {
         width: 18px;
@@ -5004,6 +5015,8 @@
               <div class="model-config-dialog-body">
                 <form id="modelConfigForm" class="model-config-form">
                   <input id="modelConfigId" type="hidden" />
+                  <fieldset class="model-config-tasks model-config-source"><legend data-i18n="legend_source">Connection</legend><label><input type="radio" name="modelConfigSource" value="api" checked /><span data-i18n="source_api">API key</span></label><label><input type="radio" name="modelConfigSource" value="cli://claude" />Claude CLI</label><label><input type="radio" name="modelConfigSource" value="cli://gemini" />Gemini CLI</label></fieldset>
+                  <p id="modelConfigCliHint" class="model-config-cli-hint" hidden data-i18n="cli_hint">No API key needed. Uses the CLI already logged in on this machine (vision tasks only).</p>
                   <div class="model-config-form-grid">
                     <label><span data-i18n="form_name">Note / Name (Optional)</span><input id="modelConfigName" type="text" autocomplete="off" placeholder="e.g.: Official OpenAI" data-i18n-placeholder="form_name_placeholder" /></label>
                     <label><span data-i18n="form_base_url">Base URL</span><input id="modelConfigBaseUrl" type="url" placeholder="https://api.openai.com" required /></label>
@@ -5045,6 +5058,7 @@
                 <button id="transparentAll" class="cut-batch" type="button" disabled data-i18n="transparent_all">All Transparent</button>
                 <button id="toggleAllSlices" class="cut-batch" type="button" disabled data-i18n="toggle_all_slices_hide">Hide All</button>
                 <button id="repairPreview" class="cut-batch" type="button" disabled data-i18n="repair_preview">Preview Inpaint</button>
+                <button id="genFullBackground" class="cut-batch" type="button" disabled data-i18n="gen_full_background" title="Patch out all slices with Preview Inpaint, then crop each detected background container (no AI model needed)">Gen Full Background</button>
               </div>
             </div>
             <div id="cutGrid" class="cut-grid"></div>
@@ -6701,6 +6715,7 @@ const I18N_TRANSLATIONS = {
     "toggle_all_slices_hide": "Hide All",
     "toggle_all_slices_show": "Show All",
     "repair_preview": "Preview Inpaint",
+    "gen_full_background": "Gen Full Background",
     "settings_trigger": "Settings",
     "new_work_trigger": "New Project",
     "drafts_trigger": "History",
@@ -6752,6 +6767,9 @@ const I18N_TRANSLATIONS = {
     "btn_show_key": "Show",
     "btn_hide_key": "Hide",
     "legend_purpose": "Purpose",
+    "legend_source": "Connection",
+    "source_api": "API key",
+    "cli_hint": "No API key needed. Uses the CLI already logged in on this machine (vision tasks only).",
     "btn_delete": "Delete",
     "btn_test": "Test",
     "btn_save_apply": "Save & Apply",
@@ -6948,6 +6966,7 @@ const I18N_TRANSLATIONS = {
     "toggle_all_slices_hide": "Ẩn tất cả",
     "toggle_all_slices_show": "Hiện tất cả",
     "repair_preview": "Xem trước vẽ bù",
+    "gen_full_background": "Tạo nền đầy đủ",
     "settings_trigger": "Cài đặt",
     "new_work_trigger": "Bắt đầu phiên mới",
     "drafts_trigger": "Lịch sử",
@@ -6999,6 +7018,9 @@ const I18N_TRANSLATIONS = {
     "btn_show_key": "Hiện",
     "btn_hide_key": "Ẩn",
     "legend_purpose": "Dùng cho",
+    "legend_source": "Kết nối",
+    "source_api": "API key",
+    "cli_hint": "Không cần API key. Dùng CLI đã đăng nhập sẵn trên máy (chỉ cho tác vụ đọc ảnh).",
     "btn_delete": "Xóa",
     "btn_test": "Kiểm tra",
     "btn_save_apply": "Lưu & Áp dụng",
@@ -8134,6 +8156,28 @@ function hasSlicePlacementChanged(previous, next) {
   return ["x", "y", "width", "height"].some((field) => previous[field] !== next[field]);
 }
 
+// True when inner sits inside outer (within a few pixels of AI bbox slack) and is clearly smaller.
+function slicePlacementContains(outer, inner, tolerance = 4) {
+  if (!outer || !inner) return false;
+  return inner.x >= outer.x - tolerance
+    && inner.y >= outer.y - tolerance
+    && inner.x + inner.width <= outer.x + outer.width + tolerance
+    && inner.y + inner.height <= outer.y + outer.height + tolerance
+    && inner.width * inner.height < outer.width * outer.height * 0.9;
+}
+
+// Slices import bottom-to-top in array order, so a container must sit before every slice it contains.
+function placeSliceBelowContained(assets, asset) {
+  const currentIndex = assets.indexOf(asset);
+  if (currentIndex < 0) return;
+  const firstContainedIndex = assets.findIndex((other) => (
+    other !== asset && slicePlacementContains(asset.placement, other.placement)
+  ));
+  if (firstContainedIndex < 0 || firstContainedIndex > currentIndex) return;
+  assets.splice(currentIndex, 1);
+  assets.splice(firstContainedIndex, 0, asset);
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     calculateDraggedSliceRadius,
@@ -8147,8 +8191,10 @@ if (typeof module !== "undefined") {
     normalizeDraftRect,
     normalizeEditedPlacement,
     normalizeSlicePlacement,
+    placeSliceBelowContained,
     pointToScreenCoords,
-    setSliceCornerRadius
+    setSliceCornerRadius,
+    slicePlacementContains
   };
 }
 
@@ -8803,6 +8849,166 @@ function colorDistance(r1, g1, b1, r2, g2, b2) {
   return Math.sqrt(dr * dr + dg * dg + db * db);
 }
 
+// Averaging edge pixels gives a muddy color when the subject touches the slice edge,
+// so group edge pixels by color and prefer the group that owns the corners.
+function pickEdgeBackgroundColor(pixels, width, height, tolerance = 34) {
+  const clusters = [];
+  const corners = new Set([0, width - 1, (height - 1) * width, height * width - 1]);
+  const addPixel = (pixel) => {
+    const r = pixels[pixel * 4];
+    const g = pixels[pixel * 4 + 1];
+    const b = pixels[pixel * 4 + 2];
+    let cluster = clusters.find((item) => colorDistance(r, g, b, item.r, item.g, item.b) <= tolerance);
+    if (!cluster) {
+      cluster = { r, g, b, count: 0, corners: 0, sum: { r: 0, g: 0, b: 0 } };
+      clusters.push(cluster);
+    }
+    cluster.count += 1;
+    if (corners.has(pixel)) cluster.corners += 1;
+    cluster.sum.r += r;
+    cluster.sum.g += g;
+    cluster.sum.b += b;
+  };
+  for (let x = 0; x < width; x += 1) {
+    addPixel(x);
+    if (height > 1) addPixel((height - 1) * width + x);
+  }
+  for (let y = 1; y < height - 1; y += 1) {
+    addPixel(y * width);
+    if (width > 1) addPixel(y * width + width - 1);
+  }
+  const best = clusters.reduce((winner, item) => (
+    !winner || item.corners > winner.corners || (item.corners === winner.corners && item.count > winner.count)
+      ? item
+      : winner
+  ), null);
+  return {
+    r: best.sum.r / best.count,
+    g: best.sum.g / best.count,
+    b: best.sum.b / best.count
+  };
+}
+
+// Clears the background connected to the slice edges (in place) and un-mixes the anti-aliased fringe
+// so no halo of the old background color is left around the subject.
+function removeEdgeBackgroundPixels(pixels, width, height, { hardThreshold = 34, softThreshold = 82, fringeRings = 3 } = {}) {
+  const background = pickEdgeBackgroundColor(pixels, width, height, hardThreshold);
+  const original = Uint8ClampedArray.from(pixels);
+  const total = width * height;
+  const distanceAt = (pixel) => colorDistance(
+    original[pixel * 4], original[pixel * 4 + 1], original[pixel * 4 + 2],
+    background.r, background.g, background.b
+  );
+  const neighbors = (pixel, visit) => {
+    const x = pixel % width;
+    if (x > 0) visit(pixel - 1);
+    if (x < width - 1) visit(pixel + 1);
+    if (pixel >= width) visit(pixel - width);
+    if (pixel < total - width) visit(pixel + width);
+  };
+
+  // 1 = cleared background, 2 = fringe already processed.
+  const state = new Uint8Array(total);
+  const queued = new Uint8Array(total);
+  const queue = new Int32Array(total);
+  let ring = [];
+  let head = 0;
+  let tail = 0;
+  const seed = (pixel) => {
+    if (queued[pixel]) return;
+    const distance = distanceAt(pixel);
+    if (distance >= softThreshold) return;
+    queued[pixel] = 1;
+    if (distance <= hardThreshold) queue[tail++] = pixel;
+    else ring.push(pixel);
+  };
+  for (let x = 0; x < width; x += 1) {
+    seed(x);
+    seed(total - width + x);
+  }
+  for (let y = 0; y < height; y += 1) {
+    seed(y * width);
+    seed(y * width + width - 1);
+  }
+  while (head < tail) {
+    const pixel = queue[head++];
+    state[pixel] = 1;
+    pixels[pixel * 4 + 3] = 0;
+    neighbors(pixel, seed);
+  }
+  // Opaque pixels touching the cleared area are the first fringe ring too.
+  for (let pixel = 0; pixel < total; pixel += 1) {
+    if (state[pixel] !== 1) continue;
+    neighbors(pixel, (next) => {
+      if (!state[next] && !queued[next]) {
+        queued[next] = 1;
+        ring.push(next);
+      }
+    });
+  }
+
+  for (let step = 0; step < fringeRings && ring.length; step += 1) {
+    const nextRing = [];
+    for (const pixel of ring) {
+      if (state[pixel]) continue;
+      state[pixel] = 2;
+      const alpha = estimateFringeAlpha(pixel);
+      const index = pixel * 4;
+      if (alpha <= 0.02) {
+        pixels[index + 3] = 0;
+      } else if (alpha < 0.98) {
+        for (let channel = 0; channel < 3; channel += 1) {
+          const base = [background.r, background.g, background.b][channel];
+          pixels[index + channel] = base + (original[index + channel] - base) / alpha;
+        }
+        pixels[index + 3] = Math.round(original[index + 3] * alpha);
+      }
+      if (alpha < 0.95) {
+        neighbors(pixel, (next) => {
+          if (!state[next] && !queued[next]) {
+            queued[next] = 1;
+            nextRing.push(next);
+          }
+        });
+      }
+    }
+    ring = nextRing;
+  }
+  return background;
+
+  // Alpha of a pixel blended between the background and the strongest nearby foreground color.
+  function estimateFringeAlpha(pixel) {
+    const x0 = pixel % width;
+    const y0 = Math.floor(pixel / width);
+    let best = null;
+    let bestDistance = softThreshold;
+    for (let y = Math.max(0, y0 - 2); y <= Math.min(height - 1, y0 + 2); y += 1) {
+      for (let x = Math.max(0, x0 - 2); x <= Math.min(width - 1, x0 + 2); x += 1) {
+        const other = y * width + x;
+        if (state[other] === 1) continue;
+        const distance = distanceAt(other);
+        if (distance > bestDistance) {
+          bestDistance = distance;
+          best = other;
+        }
+      }
+    }
+    const own = distanceAt(pixel);
+    if (best === null) {
+      return Math.min(1, Math.max(0, (own - hardThreshold) / (softThreshold - hardThreshold)));
+    }
+    const index = pixel * 4;
+    const fIndex = best * 4;
+    const fr = original[fIndex] - background.r;
+    const fg = original[fIndex + 1] - background.g;
+    const fb = original[fIndex + 2] - background.b;
+    const dot = (original[index] - background.r) * fr
+      + (original[index + 1] - background.g) * fg
+      + (original[index + 2] - background.b) * fb;
+    return Math.min(1, Math.max(0, dot / (bestDistance * bestDistance)));
+  }
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     averageBackgroundColors,
@@ -8810,6 +9016,8 @@ if (typeof module !== "undefined") {
     colorDistance,
     getPixelColor,
     mixColors,
+    pickEdgeBackgroundColor,
+    removeEdgeBackgroundPixels,
     rgbToHex,
     sampleEdgeColor,
     sampleEdgeStats,
@@ -11518,9 +11726,38 @@ function buildBackgroundRepairJobs(review) {
   });
 }
 
+// Overlays (buttons, titles) that are not slices yet, so they can be cropped and patched out locally.
+function getMissingOverlaySliceCandidates(review, existingAssets, minOverlap = 0.6) {
+  const boxes = (existingAssets || []).map((asset) => asset?.placement).filter(Boolean);
+  const overlapRatio = (a, b) => {
+    const shared = intersectDecompositionBoxes(a, b);
+    if (!shared) return 0;
+    const area = shared.width * shared.height;
+    return area / (a.width * a.height + b.width * b.height - area);
+  };
+  const candidates = [];
+  for (const background of review?.backgrounds || []) {
+    if (!background.enabled) continue;
+    for (const overlay of background.overlays || []) {
+      if (boxes.some((box) => overlapRatio(box, overlay.bbox) >= minOverlap)) continue;
+      boxes.push(overlay.bbox);
+      candidates.push({
+        name: overlay.name,
+        kind: "complex-decoration",
+        bbox: { ...overlay.bbox },
+        confidence: overlay.confidence,
+        containsEmbeddedText: false,
+        reason: overlay.reason
+      });
+    }
+  }
+  return candidates;
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     buildBackgroundRepairJobs,
+    getMissingOverlaySliceCandidates,
     createBackgroundDecompositionCache,
     createBackgroundDecompositionReview,
     getBackgroundDecompositionNavigation,
@@ -12646,6 +12883,7 @@ if (typeof module !== "undefined") {
       const transparentAllButton = document.getElementById("transparentAll");
       const toggleAllSlicesButton = document.getElementById("toggleAllSlices");
       const repairPreviewButton = document.getElementById("repairPreview");
+      const genFullBackgroundButton = document.getElementById("genFullBackground");
       const sliceSettingsDrawer = document.getElementById("sliceSettingsDrawer");
       const sliceSettingsClose = document.getElementById("sliceSettingsClose");
       const sliceSettingsTitle = document.getElementById("sliceSettingsTitle");
@@ -12699,6 +12937,8 @@ if (typeof module !== "undefined") {
       const modelConfigDeleteButton = document.getElementById("modelConfigDelete");
       const modelConfigTestButton = document.getElementById("modelConfigTest");
       const modelConfigPurposeInputs = [...modelConfigForm.querySelectorAll('input[name="modelConfigPurpose"]')];
+      const modelConfigSourceInputs = [...modelConfigForm.querySelectorAll('input[name="modelConfigSource"]')];
+      const modelConfigCliHint = document.getElementById("modelConfigCliHint");
       const modelConfigList = document.getElementById("modelConfigList");
       const startupGate = document.getElementById("startupGate");
       const startupMessage = document.getElementById("startupMessage");
@@ -13239,31 +13479,32 @@ if (typeof module !== "undefined") {
         pendingExternalSliceDrag = null;
         sliceDraft = null;
         document.body.style.userSelect = "";
-        cutReorderDrag = null;
-        cutGrid.querySelector(".cut-drop-indicator")?.remove();
+        if (cutReorderDrag) {
+          cutReorderDrag = null;
+          renderCutModules(currentManifest);
+        }
       });
       document.addEventListener("pointermove", (event) => {
         if (!cutReorderDrag || cutReorderDrag.pointerId !== event.pointerId) return;
-        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest("#cutGrid [data-slice-id]");
-        if (!target) return;
-        cutReorderDrag.moved = true;
-        cutReorderDrag.targetId = target.dataset.sliceId;
-        cutReorderDrag.before = event.clientY < target.getBoundingClientRect().top + target.getBoundingClientRect().height / 2;
-        cutGrid.querySelectorAll(".drag-over").forEach((item) => item.classList.remove("drag-over"));
-        const indicator = cutGrid.querySelector(".cut-drop-indicator");
-        if (indicator) {
-          indicator.hidden = false;
-          const top = cutReorderDrag.before ? target.offsetTop - 5 : target.offsetTop + target.offsetHeight + 5;
-          indicator.style.top = `${Math.max(0, top)}px`;
-        }
         event.preventDefault();
+        const source = cutReorderDrag.item;
+        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest("#cutGrid .cut-item");
+        if (!target || target === source) return;
+        // Layout positions (not animated rects) decide the side, so cards do not flip back and forth mid-animation.
+        const pointerY = event.clientY - cutGrid.getBoundingClientRect().top + cutGrid.scrollTop;
+        const after = pointerY > target.offsetTop + target.offsetHeight / 2;
+        const reference = after ? target.nextElementSibling : target;
+        if (reference === source || source.nextElementSibling === reference) return;
+        moveCutItemAnimated(source, reference);
+        cutReorderDrag.moved = true;
       });
       document.addEventListener("pointerup", (event) => {
         if (!cutReorderDrag || cutReorderDrag.pointerId !== event.pointerId) return;
         const drag = cutReorderDrag;
         cutReorderDrag = null;
-        cutGrid.querySelector(".cut-drop-indicator")?.remove();
-        if (drag.moved) reorderSliceAsset(drag.sourceId, drag.targetId, drag.before);
+        document.body.style.userSelect = "";
+        drag.item.classList.remove("dragging");
+        if (drag.moved) applySliceDisplayOrder([...cutGrid.querySelectorAll(".cut-item")].map((item) => item.dataset.sliceId));
       });
       document.addEventListener("pointerdown", async (event) => {
         if (
@@ -13422,6 +13663,11 @@ if (typeof module !== "undefined") {
           updateModelConfigSubmitCopy();
         });
       });
+      modelConfigSourceInputs.forEach((input) => {
+        input.addEventListener("change", () => {
+          if (input.checked) applyModelConfigSource(input.value, { resetValues: true });
+        });
+      });
       modelConfigDialogClose.addEventListener("click", closeModelConfigEditor);
       modelConfigDeleteButton.addEventListener("click", deleteEditedModelConfig);
       modelConfigTestButton.addEventListener("click", testEditedModelConfig);
@@ -13525,20 +13771,10 @@ if (typeof module !== "undefined") {
           repairPreviewButton.textContent = typeof t === "function" ? t("repair_preview", "Preview Inpaint") : "Preview Inpaint";
           return;
         }
-        repairPreviewButton.disabled = true;
-        setStatus(typeof t === "function" ? t("status_repair_preview_generating", "Generating inpaint preview...") : "Generating inpaint preview...");
-        try {
-          image.src = await createRepairedPreviewImage(activeImage);
-          repairPreviewActive = true;
-          layer.hidden = false;
-          renderSliceOverlay(card, layer, image);
-          repairPreviewButton.textContent = typeof t === "function" ? t("btn_exit_preview", "Exit Inpaint Preview") : "Exit Inpaint Preview";
-        } catch (error) {
-          setStatus(`Failed to generate completion preview: ${error.message || String(error)}`, "error");
-        } finally {
-          repairPreviewButton.disabled = false;
-        }
+        await enterRepairPreview(activeImage);
       });
+
+      genFullBackgroundButton.addEventListener("click", generateLocalFullBackgrounds);
 
       exportSlicesButton.addEventListener("click", async () => {
         await exportSlicePackage();
@@ -14611,6 +14847,8 @@ if (typeof module !== "undefined") {
         transparentAllButton.disabled = assets.length === 0 || assets.every((asset) => asset.transparent);
         toggleAllSlicesButton.disabled = assets.length === 0;
         repairPreviewButton.disabled = assets.length === 0;
+        genFullBackgroundButton.disabled = !getCachedBackgroundDecomposition(activeImage.backgroundDecompositionCache, activeImage)
+          ?.backgrounds.some((background) => background.enabled);
         toggleAllSlicesButton.textContent = assets.length > 0 && assets.every((asset) => asset.hidden) ? "Show All" : "Hide All";
         if (assets.length === 0) {
           closeSliceSettingsDrawer();
@@ -14619,7 +14857,8 @@ if (typeof module !== "undefined") {
         }
         const displayAssets = [...assets].reverse();
         cutGrid.innerHTML = displayAssets.map((asset, index) => `
-          <div class="cut-item${isSliceSelected(asset.id) ? " active" : ""}${asset.aiProcessing ? " ai-processing" : ""}${asset.auditFailed ? " audit-failed" : ""}" data-slice-id="${asset.id}" draggable="${asset.aiProcessing ? "false" : "true"}">
+          <div class="cut-item${isSliceSelected(asset.id) ? " active" : ""}${asset.aiProcessing ? " ai-processing" : ""}${asset.auditFailed ? " audit-failed" : ""}" data-slice-id="${asset.id}">
+            <button class="cut-drag-handle" type="button" aria-label="Drag to reorder ${escapeHtml(asset.name)}" title="Drag to reorder"${asset.aiProcessing ? " disabled" : ""}><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3 4h10M3 8h10M3 12h10"/></svg></button>
             <img class="cut-thumb" src="${asset.dataUrl}" alt="${escapeHtml(asset.name)}" data-slice-id="${asset.id}" draggable="false" style="border-radius:${getSliceRadiiCssValue(asset, currentManifest?.screen)};" />
             <div class="cut-meta">
               <span class="cut-name">${assets.length - index}. ${escapeHtml(asset.name)}</span>
@@ -14645,10 +14884,6 @@ if (typeof module !== "undefined") {
             ${asset.aiProcessing ? `<span class="cut-ai-loading"><span class="cut-ai-loading-label">${escapeHtml(asset.aiProcessingLabel || "Requesting AI to process the slice · 0s")}</span><button class="cut-ai-cancel" type="button" data-cancel-slice-ai="${asset.id}" aria-label="Cancel AI generation" title="Cancel AI generation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span>` : ""}
           </div>
         `).join("");
-        const dropIndicator = document.createElement("div");
-        dropIndicator.className = "cut-drop-indicator";
-        dropIndicator.hidden = true;
-        cutGrid.appendChild(dropIndicator);
         requestAnimationFrame(() => {
           cutGrid.scrollTop = scrollTop;
         });
@@ -14680,37 +14915,14 @@ if (typeof module !== "undefined") {
           });
         });
         cutGrid.querySelectorAll("[data-slice-id]").forEach((item) => {
-          item.addEventListener("pointerdown", (event) => {
-            if (getActiveSliceAsset(item.dataset.sliceId)?.aiProcessing) return;
-            if (event.button !== 0 || event.target.closest("button, input, textarea, select, details, .cut-thumb")) return;
-            cutReorderDrag = { pointerId: event.pointerId, sourceId: item.dataset.sliceId, targetId: item.dataset.sliceId, moved: false };
-            item.setPointerCapture?.(event.pointerId);
-          });
-          item.addEventListener("dragstart", (event) => {
-            if (getActiveSliceAsset(item.dataset.sliceId)?.aiProcessing) {
-              event.preventDefault();
-              return;
-            }
+          const handle = item.querySelector(":scope > .cut-drag-handle");
+          handle?.addEventListener("pointerdown", (event) => {
+            if (event.button !== 0 || getActiveSliceAsset(item.dataset.sliceId)?.aiProcessing) return;
+            event.preventDefault();
+            cutReorderDrag = { pointerId: event.pointerId, item, moved: false };
             item.classList.add("dragging");
-            event.dataTransfer.effectAllowed = "move";
-            event.dataTransfer.setData("text/plain", item.dataset.sliceId);
-          });
-          item.addEventListener("dragend", () => {
-            item.classList.remove("dragging");
-            cutGrid.querySelectorAll(".drag-over").forEach((target) => target.classList.remove("drag-over"));
-          });
-          item.addEventListener("dragover", (event) => {
-            event.preventDefault();
-            event.dataTransfer.dropEffect = "move";
-            if (event.currentTarget !== item) return;
-            item.classList.add("drag-over");
-          });
-          item.addEventListener("dragleave", () => item.classList.remove("drag-over"));
-          item.addEventListener("drop", (event) => {
-            event.preventDefault();
-            item.classList.remove("drag-over");
-            const sourceId = event.dataTransfer.getData("text/plain");
-            reorderSliceAsset(sourceId, item.dataset.sliceId);
+            document.body.style.userSelect = "none";
+            handle.setPointerCapture?.(event.pointerId);
           });
           item.addEventListener("click", (event) => {
             if (event.target.closest("[data-remove-slice]")) {
@@ -16241,15 +16453,20 @@ if (typeof module !== "undefined") {
           }
           const detectedAssets = Array.isArray(result.assets) ? result.assets : [];
           const backgrounds = Array.isArray(result.backgrounds) ? result.backgrounds : [];
-          const addedCount = await appendDetectedSliceAssets(
-            activeImage,
-            detectedAssets,
-            progressId,
-            controller.signal
-          );
           backgroundDecompositionReview = createBackgroundDecompositionReview(
             { backgrounds },
             currentManifest.screen
+          );
+          // Buttons and other overlays become slices too, so they can be exported and patched out of the background.
+          const overlayAssets = getMissingOverlaySliceCandidates(backgroundDecompositionReview, [
+            ...activeImage.sliceManifest?.assets || [],
+            ...detectedAssets.map((asset) => ({ placement: asset.bbox }))
+          ]);
+          const addedCount = await appendDetectedSliceAssets(
+            activeImage,
+            [...detectedAssets, ...overlayAssets],
+            progressId,
+            controller.signal
           );
           backgroundDecompositionReview.imageId = activeImage.id;
           persistBackgroundDecompositionReview();
@@ -16951,6 +17168,8 @@ if (typeof module !== "undefined") {
                 pair.composite,
                 pair.rawFull
               );
+              placeSliceBelowContained(activeImage.sliceManifest.assets, pair.composite);
+              placeSliceBelowContained(activeImage.sliceManifest.assets, pair.rawFull);
               normalizeSliceAssetNames(activeImage.sliceManifest.assets);
               selectedSliceIds.add(pair.composite.id);
               activeSliceId = pair.composite.id;
@@ -17263,6 +17482,9 @@ if (typeof module !== "undefined") {
           if (card && layer && image) renderSliceOverlay(card, layer, image);
         }
         if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+        preparedAssets.forEach((asset) => placeSliceBelowContained(activeImage.sliceManifest.assets, asset));
+        await patchContainedSlicesOut(activeImage, preparedAssets);
+        await applyLocalTransparency(preparedAssets);
         activeSliceId = preparedAssets.at(-1)?.id || activeSliceId;
         refreshSliceVisibility();
         renderCutModules(currentManifest);
@@ -17270,7 +17492,7 @@ if (typeof module !== "undefined") {
         return preparedAssets.length;
       }
 
-      async function addSliceAsset(placement) {
+      async function addSliceAsset(placement, preferredName = "") {
         const activeImage = getActiveResultImage();
         if (!activeImage) {
           return;
@@ -17283,7 +17505,7 @@ if (typeof module !== "undefined") {
         const index = activeImage.sliceManifest.assets.length + 1;
         const id = `slice_${activeResultIndex + 1}_${Date.now().toString(36)}_${index}`;
         const name = reserveSliceAssetName(
-          "",
+          preferredName,
           new Set(activeImage.sliceManifest.assets.map((asset) => asset.name))
         );
         const normalizedPlacement = normalizeSlicePlacement(placement, currentManifest?.screen);
@@ -17309,6 +17531,7 @@ if (typeof module !== "undefined") {
           ...repair
         };
         activeImage.sliceManifest.assets.push(asset);
+        placeSliceBelowContained(activeImage.sliceManifest.assets, asset);
         activeSliceId = id;
         if (repairPreviewActive) {
           const repairedPreview = await createRepairedPreviewImage(activeImage);
@@ -17321,6 +17544,7 @@ if (typeof module !== "undefined") {
         if (card && layer && image) renderSliceOverlay(card, layer, image);
         renderCutModules(currentManifest);
         scheduleWorkspaceDraftSave();
+        return asset;
       }
 
       async function updateSliceAssetCrop(id) {
@@ -17453,6 +17677,22 @@ if (typeof module !== "undefined") {
         refreshSliceVisibility();
         renderCutModules(currentManifest);
         scheduleWorkspaceDraftSave();
+      }
+
+      // AI-created slices start transparent; the original crop stays restorable from the Transparent menu.
+      async function applyLocalTransparency(assets) {
+        for (const asset of assets) {
+          if (asset.transparent || asset.svgData) continue;
+          try {
+            const restoreState = createSliceTransparencyRestoreState(asset);
+            applySliceTransparencyResult(asset, {
+              dataUrl: await removeEdgeBackground(restoreState.dataUrl),
+              ai: false
+            });
+          } catch (error) {
+            console.warn(`Automatic transparency failed for ${asset.name}`, error);
+          }
+        }
       }
 
       async function makeAllSlicesTransparent() {
@@ -17931,23 +18171,37 @@ if (typeof module !== "undefined") {
         scheduleWorkspaceDraftSave();
       }
 
-      function reorderSliceAsset(sourceId, targetId, before = true) {
-        if (!sourceId || !targetId || sourceId === targetId) return;
-        const activeImage = getActiveResultImage();
-        const assets = activeImage?.sliceManifest?.assets;
+      // The list shows the top layer first, while assets are stored bottom-to-top.
+      function applySliceDisplayOrder(displayIds) {
+        const assets = getActiveResultImage()?.sliceManifest?.assets;
         if (!assets) return;
-        const displayAssets = [...assets].reverse();
-        const sourceIndex = displayAssets.findIndex((asset) => asset.id === sourceId);
-        const targetIndex = displayAssets.findIndex((asset) => asset.id === targetId);
-        if (sourceIndex < 0 || targetIndex < 0) return;
-        if (displayAssets[sourceIndex].aiProcessing || displayAssets[targetIndex].aiProcessing) return;
+        const byId = new Map(assets.map((asset) => [asset.id, asset]));
+        const ordered = displayIds.map((id) => byId.get(id)).filter(Boolean).reverse();
+        if (ordered.length !== assets.length || ordered.every((asset, index) => asset === assets[index])) {
+          renderCutModules(currentManifest);
+          return;
+        }
         recordSliceHistory();
-        const [moved] = displayAssets.splice(sourceIndex, 1);
-        const targetIndexAfterMove = displayAssets.findIndex((asset) => asset.id === targetId);
-        displayAssets.splice(Math.max(0, targetIndexAfterMove + (before ? 0 : 1)), 0, moved);
-        assets.splice(0, assets.length, ...displayAssets.reverse());
-        renderCutModules(currentManifest, true);
+        assets.splice(0, assets.length, ...ordered);
+        renderCutModules(currentManifest);
         scheduleWorkspaceDraftSave();
+      }
+
+      // Moves a card and slides the cards it passes into their new places.
+      function moveCutItemAnimated(item, reference) {
+        const items = [...cutGrid.querySelectorAll(".cut-item")];
+        const before = new Map(items.map((card) => [card, card.offsetTop]));
+        cutGrid.insertBefore(item, reference);
+        for (const card of items) {
+          const delta = before.get(card) - card.offsetTop;
+          if (!delta || card === item) continue;
+          card.style.transition = "none";
+          card.style.transform = `translateY(${delta}px)`;
+          requestAnimationFrame(() => {
+            card.style.transition = "transform 160ms ease";
+            card.style.transform = "";
+          });
+        }
       }
 
       async function cropImageRegion(dataUrl, placement) {
@@ -17981,27 +18235,7 @@ if (typeof module !== "undefined") {
         context.drawImage(source, 0, 0);
         const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
         const pixels = imageData.data;
-        const background = sampleEdgeColor(pixels, canvas.width, canvas.height);
-        const hardThreshold = 34;
-        const softThreshold = 82;
-
-        for (let index = 0; index < pixels.length; index += 4) {
-          const distance = colorDistance(
-            pixels[index],
-            pixels[index + 1],
-            pixels[index + 2],
-            background.r,
-            background.g,
-            background.b
-          );
-          if (distance <= hardThreshold) {
-            pixels[index + 3] = 0;
-          } else if (distance < softThreshold) {
-            const alphaRatio = (distance - hardThreshold) / (softThreshold - hardThreshold);
-            pixels[index + 3] = Math.round(pixels[index + 3] * alphaRatio);
-          }
-        }
-
+        removeEdgeBackgroundPixels(pixels, canvas.width, canvas.height);
         context.putImageData(imageData, 0, 0);
         return canvas.toDataURL("image/png");
       }
@@ -18095,7 +18329,8 @@ if (typeof module !== "undefined") {
           ...(!asset.svgData && asset.dataUrl ? {
             dataUrl: await ensurePngOrJpegDataUrl(asset.dataUrl)
           } : {}),
-          selected: isSliceAssetIncludedForImport(asset)
+          selected: isSliceAssetIncludedForImport(asset),
+          parentId: findContainingSliceId(asset, activeImage.sliceManifest.assets.filter(isSliceAssetIncludedForImport))
         })));
         const previewDataUrl = await createRepairedPreviewImage(activeImage);
         return {
@@ -19986,6 +20221,115 @@ if (typeof module !== "undefined") {
         return result;
       }
 
+      async function enterRepairPreview(activeImage) {
+        const card = resultGrid.querySelector(".result-card.slice-mode");
+        const image = card?.querySelector(".result-canvas img");
+        const layer = card?.querySelector(".slice-layer");
+        if (!image || !layer) return false;
+        repairPreviewButton.disabled = true;
+        setStatus(typeof t === "function" ? t("status_repair_preview_generating", "Generating inpaint preview...") : "Generating inpaint preview...");
+        try {
+          image.src = await createRepairedPreviewImage(activeImage);
+          repairPreviewActive = true;
+          layer.hidden = false;
+          renderSliceOverlay(card, layer, image);
+          repairPreviewButton.textContent = typeof t === "function" ? t("btn_exit_preview", "Exit Inpaint Preview") : "Exit Inpaint Preview";
+          return true;
+        } catch (error) {
+          setStatus(`Failed to generate completion preview: ${error.message || String(error)}`, "error");
+          return false;
+        } finally {
+          repairPreviewButton.disabled = false;
+        }
+      }
+
+      // A slice that fully contains other slices (a button around its icon) is re-cropped with those slices patched out,
+      // so the icon is not duplicated in the button image. Only untouched AI crops are changed.
+      async function patchContainedSlicesOut(activeImage, outerAssets) {
+        const allAssets = activeImage.sliceManifest.assets;
+        for (const outer of outerAssets) {
+          if (
+            outer.source !== "ai-bbox"
+            || outer.innerSlicesPatched
+            || outer.transparent
+            || outer.aiCompleted
+            || outer.aiRedrawn
+            || outer.svgData
+          ) continue;
+          const inners = allAssets.filter((asset) => asset !== outer && slicePlacementContains(outer.placement, asset.placement));
+          if (inners.length === 0) continue;
+          const { x, y, width, height } = outer.placement;
+          const source = await loadImageElement(activeImage.dataUrl);
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const context = canvas.getContext("2d");
+          context.drawImage(source, x, y, width, height, 0, 0, width, height);
+          for (const inner of inners) {
+            if (!inner.repairDataUrl) {
+              Object.assign(inner, await createSliceRepairPatch(activeImage.dataUrl, inner.placement));
+            }
+            const repair = await loadImageElement(inner.repairDataUrl);
+            context.drawImage(repair, inner.placement.x - x, inner.placement.y - y, inner.placement.width, inner.placement.height);
+          }
+          outer.originalDataUrl = canvas.toDataURL("image/png");
+          outer.dataUrl = outer.originalDataUrl;
+          outer.innerSlicesPatched = true;
+        }
+        renderCutModules(currentManifest);
+        scheduleWorkspaceDraftSave();
+      }
+
+      // Local alternative to AI background restore: patch every slice out with Preview Inpaint, then crop each background.
+      async function generateLocalFullBackgrounds() {
+        const activeImage = getActiveResultImage();
+        const review = activeImage
+          ? getCachedBackgroundDecomposition(activeImage.backgroundDecompositionCache, activeImage)
+          : null;
+        const backgrounds = (review?.backgrounds || []).filter((background) => background.enabled);
+        if (!activeImage || backgrounds.length === 0 || uiBusy) {
+          setStatus("Run AI Slice first to detect a background container.", "warning");
+          return;
+        }
+        genFullBackgroundButton.disabled = true;
+        try {
+          ensureImageSliceState(activeImage);
+          const overlayAssets = getMissingOverlaySliceCandidates(review, activeImage.sliceManifest.assets);
+          if (overlayAssets.length > 0) {
+            await appendDetectedSliceAssets(activeImage, overlayAssets, createAiProgressId("overlay_slices"));
+          }
+          await patchContainedSlicesOut(activeImage, activeImage.sliceManifest.assets);
+          if (repairPreviewActive && overlayAssets.length > 0) {
+            const previewImage = resultGrid.querySelector(".result-card.slice-mode .result-canvas img");
+            if (previewImage) previewImage.src = await createRepairedPreviewImage(activeImage);
+          } else if (!repairPreviewActive && !(await enterRepairPreview(activeImage))) {
+            return;
+          }
+          const backgroundAssets = [];
+          for (const background of backgrounds) {
+            backgroundAssets.push(await addSliceAsset(background.bbox, background.name));
+          }
+          await applyLocalTransparency(backgroundAssets.filter(Boolean));
+          renderCutModules(currentManifest);
+          scheduleWorkspaceDraftSave();
+          setStatus(`Added ${backgrounds.length} full background slice(s) from the inpaint preview.`, "success");
+        } catch (error) {
+          setStatus(`Full background failed: ${error.message || String(error)}`, "error");
+        } finally {
+          genFullBackgroundButton.disabled = false;
+        }
+      }
+
+      // The smallest other slice that fully contains this one, used to nest layers on import.
+      function findContainingSliceId(asset, assets) {
+        let best = null;
+        for (const other of assets) {
+          if (other === asset || other.id === asset.id || !slicePlacementContains(other.placement, asset.placement)) continue;
+          if (!best || other.placement.width * other.placement.height < best.placement.width * best.placement.height) best = other;
+        }
+        return best?.id || null;
+      }
+
       async function createRepairedPreviewImage(activeImage) {
         const assets = activeImage?.sliceManifest?.assets || [];
         if (!activeImage?.dataUrl) return "";
@@ -20004,6 +20348,9 @@ if (typeof module !== "undefined") {
         if (assets.length === 0) return canvas.toDataURL("image/png");
 
         for (const asset of assets) {
+          // A slice inside another slice is already covered by the container patch; its own patch would
+          // paint the container color into the reference image and show through transparent children.
+          if (findContainingSliceId(asset, assets)) continue;
           if (!asset.repairDataUrl) {
             Object.assign(asset, await createSliceRepairPatch(activeImage.dataUrl, asset.placement));
           }
@@ -20588,6 +20935,8 @@ if (typeof module !== "undefined") {
         modelConfigPurposeInputs.forEach((input) => {
           input.checked = input.value === purpose;
         });
+        const baseUrl = modelConfigBaseUrlInput.value.toLowerCase();
+        applyModelConfigSource(baseUrl.startsWith("cli://") ? baseUrl : "api", { resetValues: false });
         modelConfigDeleteButton.hidden = !config;
         applyModelConfigTestButtonState(modelConfigTestButton, config);
         closeEditedModelConfigOptions();
@@ -20602,6 +20951,32 @@ if (typeof module !== "undefined") {
         modelConfigDialog.classList.add("open");
         modelConfigDialog.setAttribute("aria-hidden", "false");
         modelConfigNameInput.focus();
+      }
+
+      // CLI configs need no key and only support vision, so hide or lock what does not apply.
+      function applyModelConfigSource(source, { resetValues }) {
+        const isCli = source !== "api";
+        modelConfigSourceInputs.forEach((input) => {
+          input.checked = input.value === source;
+        });
+        modelConfigBaseUrlInput.closest("label").hidden = isCli;
+        modelConfigApiKeyInput.closest("label").hidden = isCli;
+        modelConfigCliHint.hidden = !isCli;
+        const visionInput = modelConfigPurposeInputs.find((input) => input.value === "vision");
+        const imageInput = modelConfigPurposeInputs.find((input) => input.value === "image");
+        imageInput.disabled = isCli;
+        if (isCli && imageInput.checked) {
+          visionInput.checked = true;
+          visionInput.dispatchEvent(new Event("change"));
+        }
+        if (!resetValues) return;
+        if (isCli) {
+          modelConfigBaseUrlInput.value = source;
+          modelConfigModelInput.value = "default";
+        } else if (/^cli:\/\//i.test(modelConfigBaseUrlInput.value)) {
+          modelConfigBaseUrlInput.value = "https://api.openai.com";
+          modelConfigModelInput.value = getModelPurposeDefaults(editingModelConfigPurpose).model;
+        }
       }
 
       function closeModelConfigEditor() {

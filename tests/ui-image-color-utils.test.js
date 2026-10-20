@@ -7,6 +7,8 @@ const {
   colorDistance,
   getPixelColor,
   mixColors,
+  pickEdgeBackgroundColor,
+  removeEdgeBackgroundPixels,
   rgbToHex,
   sampleEdgeColor,
   sampleEdgeStats,
@@ -92,4 +94,63 @@ test("edge sampling summarizes border colors", () => {
     b: 15,
     luma: 15
   });
+});
+
+function makeImage(width, height, colorAt) {
+  const pixels = new Uint8ClampedArray(width * height * 4);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const [r, g, b] = colorAt(x, y);
+      pixels.set([r, g, b, 255], (y * width + x) * 4);
+    }
+  }
+  return pixels;
+}
+
+const CREAM = [250, 240, 225];
+const BROWN = [60, 25, 15];
+const YELLOW = [245, 200, 60];
+
+test("edge background removal keeps interior colors close to the background", () => {
+  // Cream background, brown outline ring, cream-ish yellow fill inside.
+  const pixels = makeImage(20, 20, (x, y) => {
+    const inside = x >= 5 && x <= 14 && y >= 5 && y <= 14;
+    const ring = inside && (x === 5 || x === 14 || y === 5 || y === 14);
+    if (ring) return BROWN;
+    return inside ? [245, 235, 215] : CREAM;
+  });
+  removeEdgeBackgroundPixels(pixels, 20, 20);
+  assert.equal(pixels[3], 0);
+  assert.equal(pixels[(10 * 20 + 10) * 4 + 3], 255);
+  assert.equal(pixels[(5 * 20 + 10) * 4 + 3], 255);
+});
+
+test("edge background color prefers the corners when the subject touches the edges", () => {
+  // Brown outline covers most of every edge; only the corners show the cream background.
+  const pixels = makeImage(20, 20, (x, y) => {
+    const corner = (x < 2 || x > 17) && (y < 2 || y > 17);
+    if (corner) return CREAM;
+    const outline = x < 2 || x > 17 || y < 2 || y > 17;
+    return outline ? BROWN : YELLOW;
+  });
+  const background = pickEdgeBackgroundColor(pixels, 20, 20);
+  assert.deepEqual([background.r, background.g, background.b], CREAM);
+  removeEdgeBackgroundPixels(pixels, 20, 20);
+  assert.equal(pixels[3], 0);
+  assert.equal(pixels[(10 * 20 + 10) * 4 + 3], 255);
+});
+
+test("edge background removal un-mixes the anti-aliased fringe", () => {
+  // A brown block with a one-pixel 50/50 cream/brown blend around it, on a cream background.
+  const pixels = makeImage(12, 12, (x, y) => {
+    const ring = Math.max(Math.abs(x - 6), Math.abs(y - 6));
+    if (ring > 2) return CREAM;
+    if (ring === 2) return CREAM.map((value, index) => (value + BROWN[index]) / 2);
+    return BROWN;
+  });
+  removeEdgeBackgroundPixels(pixels, 12, 12);
+  const index = (6 * 12 + 4) * 4;
+  assert.ok(Math.abs(pixels[index + 3] - 128) <= 3, `alpha ${pixels[index + 3]}`);
+  assert.ok(colorDistance(pixels[index], pixels[index + 1], pixels[index + 2], ...BROWN) < 6);
+  assert.equal(pixels[(6 * 12 + 6) * 4 + 3], 255);
 });

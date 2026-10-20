@@ -159,6 +159,8 @@
               <div class="model-config-dialog-body">
                 <form id="modelConfigForm" class="model-config-form">
                   <input id="modelConfigId" type="hidden" />
+                  <fieldset class="model-config-tasks model-config-source"><legend data-i18n="legend_source">Connection</legend><label><input type="radio" name="modelConfigSource" value="api" checked /><span data-i18n="source_api">API key</span></label><label><input type="radio" name="modelConfigSource" value="cli://claude" />Claude CLI</label><label><input type="radio" name="modelConfigSource" value="cli://gemini" />Gemini CLI</label></fieldset>
+                  <p id="modelConfigCliHint" class="model-config-cli-hint" hidden data-i18n="cli_hint">No API key needed. Uses the CLI already logged in on this machine (vision tasks only).</p>
                   <div class="model-config-form-grid">
                     <label><span data-i18n="form_name">Note / Name (Optional)</span><input id="modelConfigName" type="text" autocomplete="off" placeholder="e.g.: Official OpenAI" data-i18n-placeholder="form_name_placeholder" /></label>
                     <label><span data-i18n="form_base_url">Base URL</span><input id="modelConfigBaseUrl" type="url" placeholder="https://api.openai.com" required /></label>
@@ -200,6 +202,7 @@
                 <button id="transparentAll" class="cut-batch" type="button" disabled data-i18n="transparent_all">All Transparent</button>
                 <button id="toggleAllSlices" class="cut-batch" type="button" disabled data-i18n="toggle_all_slices_hide">Hide All</button>
                 <button id="repairPreview" class="cut-batch" type="button" disabled data-i18n="repair_preview">Preview Inpaint</button>
+                <button id="genFullBackground" class="cut-batch" type="button" disabled data-i18n="gen_full_background" title="Patch out all slices with Preview Inpaint, then crop each detected background container (no AI model needed)">Gen Full Background</button>
               </div>
             </div>
             <div id="cutGrid" class="cut-grid"></div>

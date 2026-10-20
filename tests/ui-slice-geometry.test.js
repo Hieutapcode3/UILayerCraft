@@ -13,6 +13,8 @@ const {
   normalizeDraftRect,
   normalizeEditedPlacement,
   normalizeSlicePlacement,
+  placeSliceBelowContained,
+  slicePlacementContains,
   pointToScreenCoords,
   setSliceCornerRadius
 } = require("../src/ui/services/slice-geometry");
@@ -226,4 +228,18 @@ test("hasSlicePlacementChanged compares placement fields only", () => {
     { x: 1, y: 2, width: 3, height: 4 },
     { x: 1, y: 2, width: 4, height: 4 }
   ), true);
+});
+
+test("a new container slice moves below the slices it contains", () => {
+  const button = { id: "button", placement: { x: 290, y: 1006, width: 500, height: 190 } };
+  const arrow = { id: "arrow", placement: { x: 472, y: 1028, width: 132, height: 128 } };
+  const title = { id: "title", placement: { x: 338, y: 562, width: 430, height: 134 } };
+  const outside = { id: "outside", placement: { x: 0, y: 0, width: 50, height: 50 } };
+  const panel = { id: "panel", placement: { x: 104, y: 436, width: 884, height: 888 } };
+  const assets = [outside, title, arrow, button, panel];
+  placeSliceBelowContained(assets, button);
+  placeSliceBelowContained(assets, panel);
+  assert.deepEqual(assets.map((asset) => asset.id), ["outside", "panel", "title", "button", "arrow"]);
+  assert.equal(slicePlacementContains(panel.placement, panel.placement), false);
+  assert.equal(slicePlacementContains(button.placement, { x: 288, y: 1004, width: 100, height: 100 }), true);
 });

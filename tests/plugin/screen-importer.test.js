@@ -314,3 +314,45 @@ test("createEditableDesignScreen skips one-node groups and reports grouping fail
     reason: "group failed"
   }]);
 });
+
+test("createUiAssetScreen groups slices inside their container slice", async () => {
+  const frame = createNode("FRAME");
+  const groups = [];
+  const figmaApi = {
+    currentPage: { children: [], selection: [] },
+    viewport: { center: { x: 500, y: 300 }, scrollAndZoomIntoView() {} },
+    createFrame: () => frame,
+    createRectangle: () => createNode("RECTANGLE"),
+    createImage: () => ({ hash: "image-hash" }),
+    base64Decode: () => new Uint8Array([1]),
+    group(nodes, parent, index) {
+      const group = createNode("GROUP");
+      group.children = [...nodes];
+      parent.children = parent.children.filter((node) => !nodes.includes(node));
+      parent.children.splice(index ?? parent.children.length, 0, group);
+      groups.push(group);
+      return group;
+    }
+  };
+  const asset = (id, parentId, placement) => ({
+    id, name: id, parentId, placement, dataUrl: "data:image/png;base64,AQ==", selected: true
+  });
+  await createUiAssetScreen({
+    figmaApi,
+    notifyRecoverableError() {},
+    manifest: {
+      screen: { name: "Screen", width: 1080, height: 1920 },
+      previewImage: { dataUrl: "data:image/png;base64,AQ==" },
+      assets: [
+        asset("panel", null, { x: 100, y: 400, width: 880, height: 900 }),
+        asset("title", "panel", { x: 330, y: 560, width: 430, height: 130 }),
+        asset("button", "panel", { x: 290, y: 1000, width: 500, height: 190 }),
+        asset("arrow", "button", { x: 470, y: 1020, width: 130, height: 130 })
+      ]
+    }
+  });
+  assert.deepEqual(groups.map((group) => group.name), ["button_group", "panel_group"]);
+  assert.deepEqual(frame.children.map((node) => node.name), ["preview_full_ui_reference", "panel_group"]);
+  assert.deepEqual(groups[1].children.map((node) => node.name), ["panel", "title", "button_group"]);
+  assert.deepEqual(groups[0].children.map((node) => node.name), ["button", "arrow"]);
+});

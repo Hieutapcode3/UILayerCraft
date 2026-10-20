@@ -89,6 +89,7 @@
       const transparentAllButton = document.getElementById("transparentAll");
       const toggleAllSlicesButton = document.getElementById("toggleAllSlices");
       const repairPreviewButton = document.getElementById("repairPreview");
+      const genFullBackgroundButton = document.getElementById("genFullBackground");
       const sliceSettingsDrawer = document.getElementById("sliceSettingsDrawer");
       const sliceSettingsClose = document.getElementById("sliceSettingsClose");
       const sliceSettingsTitle = document.getElementById("sliceSettingsTitle");
@@ -142,6 +143,8 @@
       const modelConfigDeleteButton = document.getElementById("modelConfigDelete");
       const modelConfigTestButton = document.getElementById("modelConfigTest");
       const modelConfigPurposeInputs = [...modelConfigForm.querySelectorAll('input[name="modelConfigPurpose"]')];
+      const modelConfigSourceInputs = [...modelConfigForm.querySelectorAll('input[name="modelConfigSource"]')];
+      const modelConfigCliHint = document.getElementById("modelConfigCliHint");
       const modelConfigList = document.getElementById("modelConfigList");
       const startupGate = document.getElementById("startupGate");
       const startupMessage = document.getElementById("startupMessage");
@@ -682,31 +685,32 @@
         pendingExternalSliceDrag = null;
         sliceDraft = null;
         document.body.style.userSelect = "";
-        cutReorderDrag = null;
-        cutGrid.querySelector(".cut-drop-indicator")?.remove();
+        if (cutReorderDrag) {
+          cutReorderDrag = null;
+          renderCutModules(currentManifest);
+        }
       });
       document.addEventListener("pointermove", (event) => {
         if (!cutReorderDrag || cutReorderDrag.pointerId !== event.pointerId) return;
-        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest("#cutGrid [data-slice-id]");
-        if (!target) return;
-        cutReorderDrag.moved = true;
-        cutReorderDrag.targetId = target.dataset.sliceId;
-        cutReorderDrag.before = event.clientY < target.getBoundingClientRect().top + target.getBoundingClientRect().height / 2;
-        cutGrid.querySelectorAll(".drag-over").forEach((item) => item.classList.remove("drag-over"));
-        const indicator = cutGrid.querySelector(".cut-drop-indicator");
-        if (indicator) {
-          indicator.hidden = false;
-          const top = cutReorderDrag.before ? target.offsetTop - 5 : target.offsetTop + target.offsetHeight + 5;
-          indicator.style.top = `${Math.max(0, top)}px`;
-        }
         event.preventDefault();
+        const source = cutReorderDrag.item;
+        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest("#cutGrid .cut-item");
+        if (!target || target === source) return;
+        // Layout positions (not animated rects) decide the side, so cards do not flip back and forth mid-animation.
+        const pointerY = event.clientY - cutGrid.getBoundingClientRect().top + cutGrid.scrollTop;
+        const after = pointerY > target.offsetTop + target.offsetHeight / 2;
+        const reference = after ? target.nextElementSibling : target;
+        if (reference === source || source.nextElementSibling === reference) return;
+        moveCutItemAnimated(source, reference);
+        cutReorderDrag.moved = true;
       });
       document.addEventListener("pointerup", (event) => {
         if (!cutReorderDrag || cutReorderDrag.pointerId !== event.pointerId) return;
         const drag = cutReorderDrag;
         cutReorderDrag = null;
-        cutGrid.querySelector(".cut-drop-indicator")?.remove();
-        if (drag.moved) reorderSliceAsset(drag.sourceId, drag.targetId, drag.before);
+        document.body.style.userSelect = "";
+        drag.item.classList.remove("dragging");
+        if (drag.moved) applySliceDisplayOrder([...cutGrid.querySelectorAll(".cut-item")].map((item) => item.dataset.sliceId));
       });
       document.addEventListener("pointerdown", async (event) => {
         if (
@@ -865,6 +869,11 @@
           updateModelConfigSubmitCopy();
         });
       });
+      modelConfigSourceInputs.forEach((input) => {
+        input.addEventListener("change", () => {
+          if (input.checked) applyModelConfigSource(input.value, { resetValues: true });
+        });
+      });
       modelConfigDialogClose.addEventListener("click", closeModelConfigEditor);
       modelConfigDeleteButton.addEventListener("click", deleteEditedModelConfig);
       modelConfigTestButton.addEventListener("click", testEditedModelConfig);
@@ -968,20 +977,10 @@
           repairPreviewButton.textContent = typeof t === "function" ? t("repair_preview", "Preview Inpaint") : "Preview Inpaint";
           return;
         }
-        repairPreviewButton.disabled = true;
-        setStatus(typeof t === "function" ? t("status_repair_preview_generating", "Generating inpaint preview...") : "Generating inpaint preview...");
-        try {
-          image.src = await createRepairedPreviewImage(activeImage);
-          repairPreviewActive = true;
-          layer.hidden = false;
-          renderSliceOverlay(card, layer, image);
-          repairPreviewButton.textContent = typeof t === "function" ? t("btn_exit_preview", "Exit Inpaint Preview") : "Exit Inpaint Preview";
-        } catch (error) {
-          setStatus(`Failed to generate completion preview: ${error.message || String(error)}`, "error");
-        } finally {
-          repairPreviewButton.disabled = false;
-        }
+        await enterRepairPreview(activeImage);
       });
+
+      genFullBackgroundButton.addEventListener("click", generateLocalFullBackgrounds);
 
       exportSlicesButton.addEventListener("click", async () => {
         await exportSlicePackage();
@@ -2054,6 +2053,8 @@
         transparentAllButton.disabled = assets.length === 0 || assets.every((asset) => asset.transparent);
         toggleAllSlicesButton.disabled = assets.length === 0;
         repairPreviewButton.disabled = assets.length === 0;
+        genFullBackgroundButton.disabled = !getCachedBackgroundDecomposition(activeImage.backgroundDecompositionCache, activeImage)
+          ?.backgrounds.some((background) => background.enabled);
         toggleAllSlicesButton.textContent = assets.length > 0 && assets.every((asset) => asset.hidden) ? "Show All" : "Hide All";
         if (assets.length === 0) {
           closeSliceSettingsDrawer();
@@ -2062,7 +2063,8 @@
         }
         const displayAssets = [...assets].reverse();
         cutGrid.innerHTML = displayAssets.map((asset, index) => `
-          <div class="cut-item${isSliceSelected(asset.id) ? " active" : ""}${asset.aiProcessing ? " ai-processing" : ""}${asset.auditFailed ? " audit-failed" : ""}" data-slice-id="${asset.id}" draggable="${asset.aiProcessing ? "false" : "true"}">
+          <div class="cut-item${isSliceSelected(asset.id) ? " active" : ""}${asset.aiProcessing ? " ai-processing" : ""}${asset.auditFailed ? " audit-failed" : ""}" data-slice-id="${asset.id}">
+            <button class="cut-drag-handle" type="button" aria-label="Drag to reorder ${escapeHtml(asset.name)}" title="Drag to reorder"${asset.aiProcessing ? " disabled" : ""}><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3 4h10M3 8h10M3 12h10"/></svg></button>
             <img class="cut-thumb" src="${asset.dataUrl}" alt="${escapeHtml(asset.name)}" data-slice-id="${asset.id}" draggable="false" style="border-radius:${getSliceRadiiCssValue(asset, currentManifest?.screen)};" />
             <div class="cut-meta">
               <span class="cut-name">${assets.length - index}. ${escapeHtml(asset.name)}</span>
@@ -2088,10 +2090,6 @@
             ${asset.aiProcessing ? `<span class="cut-ai-loading"><span class="cut-ai-loading-label">${escapeHtml(asset.aiProcessingLabel || "Requesting AI to process the slice · 0s")}</span><button class="cut-ai-cancel" type="button" data-cancel-slice-ai="${asset.id}" aria-label="Cancel AI generation" title="Cancel AI generation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span>` : ""}
           </div>
         `).join("");
-        const dropIndicator = document.createElement("div");
-        dropIndicator.className = "cut-drop-indicator";
-        dropIndicator.hidden = true;
-        cutGrid.appendChild(dropIndicator);
         requestAnimationFrame(() => {
           cutGrid.scrollTop = scrollTop;
         });
@@ -2123,37 +2121,14 @@
           });
         });
         cutGrid.querySelectorAll("[data-slice-id]").forEach((item) => {
-          item.addEventListener("pointerdown", (event) => {
-            if (getActiveSliceAsset(item.dataset.sliceId)?.aiProcessing) return;
-            if (event.button !== 0 || event.target.closest("button, input, textarea, select, details, .cut-thumb")) return;
-            cutReorderDrag = { pointerId: event.pointerId, sourceId: item.dataset.sliceId, targetId: item.dataset.sliceId, moved: false };
-            item.setPointerCapture?.(event.pointerId);
-          });
-          item.addEventListener("dragstart", (event) => {
-            if (getActiveSliceAsset(item.dataset.sliceId)?.aiProcessing) {
-              event.preventDefault();
-              return;
-            }
+          const handle = item.querySelector(":scope > .cut-drag-handle");
+          handle?.addEventListener("pointerdown", (event) => {
+            if (event.button !== 0 || getActiveSliceAsset(item.dataset.sliceId)?.aiProcessing) return;
+            event.preventDefault();
+            cutReorderDrag = { pointerId: event.pointerId, item, moved: false };
             item.classList.add("dragging");
-            event.dataTransfer.effectAllowed = "move";
-            event.dataTransfer.setData("text/plain", item.dataset.sliceId);
-          });
-          item.addEventListener("dragend", () => {
-            item.classList.remove("dragging");
-            cutGrid.querySelectorAll(".drag-over").forEach((target) => target.classList.remove("drag-over"));
-          });
-          item.addEventListener("dragover", (event) => {
-            event.preventDefault();
-            event.dataTransfer.dropEffect = "move";
-            if (event.currentTarget !== item) return;
-            item.classList.add("drag-over");
-          });
-          item.addEventListener("dragleave", () => item.classList.remove("drag-over"));
-          item.addEventListener("drop", (event) => {
-            event.preventDefault();
-            item.classList.remove("drag-over");
-            const sourceId = event.dataTransfer.getData("text/plain");
-            reorderSliceAsset(sourceId, item.dataset.sliceId);
+            document.body.style.userSelect = "none";
+            handle.setPointerCapture?.(event.pointerId);
           });
           item.addEventListener("click", (event) => {
             if (event.target.closest("[data-remove-slice]")) {
@@ -3684,15 +3659,20 @@
           }
           const detectedAssets = Array.isArray(result.assets) ? result.assets : [];
           const backgrounds = Array.isArray(result.backgrounds) ? result.backgrounds : [];
-          const addedCount = await appendDetectedSliceAssets(
-            activeImage,
-            detectedAssets,
-            progressId,
-            controller.signal
-          );
           backgroundDecompositionReview = createBackgroundDecompositionReview(
             { backgrounds },
             currentManifest.screen
+          );
+          // Buttons and other overlays become slices too, so they can be exported and patched out of the background.
+          const overlayAssets = getMissingOverlaySliceCandidates(backgroundDecompositionReview, [
+            ...activeImage.sliceManifest?.assets || [],
+            ...detectedAssets.map((asset) => ({ placement: asset.bbox }))
+          ]);
+          const addedCount = await appendDetectedSliceAssets(
+            activeImage,
+            [...detectedAssets, ...overlayAssets],
+            progressId,
+            controller.signal
           );
           backgroundDecompositionReview.imageId = activeImage.id;
           persistBackgroundDecompositionReview();
@@ -4394,6 +4374,8 @@
                 pair.composite,
                 pair.rawFull
               );
+              placeSliceBelowContained(activeImage.sliceManifest.assets, pair.composite);
+              placeSliceBelowContained(activeImage.sliceManifest.assets, pair.rawFull);
               normalizeSliceAssetNames(activeImage.sliceManifest.assets);
               selectedSliceIds.add(pair.composite.id);
               activeSliceId = pair.composite.id;
@@ -4706,6 +4688,9 @@
           if (card && layer && image) renderSliceOverlay(card, layer, image);
         }
         if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+        preparedAssets.forEach((asset) => placeSliceBelowContained(activeImage.sliceManifest.assets, asset));
+        await patchContainedSlicesOut(activeImage, preparedAssets);
+        await applyLocalTransparency(preparedAssets);
         activeSliceId = preparedAssets.at(-1)?.id || activeSliceId;
         refreshSliceVisibility();
         renderCutModules(currentManifest);
@@ -4713,7 +4698,7 @@
         return preparedAssets.length;
       }
 
-      async function addSliceAsset(placement) {
+      async function addSliceAsset(placement, preferredName = "") {
         const activeImage = getActiveResultImage();
         if (!activeImage) {
           return;
@@ -4726,7 +4711,7 @@
         const index = activeImage.sliceManifest.assets.length + 1;
         const id = `slice_${activeResultIndex + 1}_${Date.now().toString(36)}_${index}`;
         const name = reserveSliceAssetName(
-          "",
+          preferredName,
           new Set(activeImage.sliceManifest.assets.map((asset) => asset.name))
         );
         const normalizedPlacement = normalizeSlicePlacement(placement, currentManifest?.screen);
@@ -4752,6 +4737,7 @@
           ...repair
         };
         activeImage.sliceManifest.assets.push(asset);
+        placeSliceBelowContained(activeImage.sliceManifest.assets, asset);
         activeSliceId = id;
         if (repairPreviewActive) {
           const repairedPreview = await createRepairedPreviewImage(activeImage);
@@ -4764,6 +4750,7 @@
         if (card && layer && image) renderSliceOverlay(card, layer, image);
         renderCutModules(currentManifest);
         scheduleWorkspaceDraftSave();
+        return asset;
       }
 
       async function updateSliceAssetCrop(id) {
@@ -4896,6 +4883,22 @@
         refreshSliceVisibility();
         renderCutModules(currentManifest);
         scheduleWorkspaceDraftSave();
+      }
+
+      // AI-created slices start transparent; the original crop stays restorable from the Transparent menu.
+      async function applyLocalTransparency(assets) {
+        for (const asset of assets) {
+          if (asset.transparent || asset.svgData) continue;
+          try {
+            const restoreState = createSliceTransparencyRestoreState(asset);
+            applySliceTransparencyResult(asset, {
+              dataUrl: await removeEdgeBackground(restoreState.dataUrl),
+              ai: false
+            });
+          } catch (error) {
+            console.warn(`Automatic transparency failed for ${asset.name}`, error);
+          }
+        }
       }
 
       async function makeAllSlicesTransparent() {
@@ -5374,23 +5377,37 @@
         scheduleWorkspaceDraftSave();
       }
 
-      function reorderSliceAsset(sourceId, targetId, before = true) {
-        if (!sourceId || !targetId || sourceId === targetId) return;
-        const activeImage = getActiveResultImage();
-        const assets = activeImage?.sliceManifest?.assets;
+      // The list shows the top layer first, while assets are stored bottom-to-top.
+      function applySliceDisplayOrder(displayIds) {
+        const assets = getActiveResultImage()?.sliceManifest?.assets;
         if (!assets) return;
-        const displayAssets = [...assets].reverse();
-        const sourceIndex = displayAssets.findIndex((asset) => asset.id === sourceId);
-        const targetIndex = displayAssets.findIndex((asset) => asset.id === targetId);
-        if (sourceIndex < 0 || targetIndex < 0) return;
-        if (displayAssets[sourceIndex].aiProcessing || displayAssets[targetIndex].aiProcessing) return;
+        const byId = new Map(assets.map((asset) => [asset.id, asset]));
+        const ordered = displayIds.map((id) => byId.get(id)).filter(Boolean).reverse();
+        if (ordered.length !== assets.length || ordered.every((asset, index) => asset === assets[index])) {
+          renderCutModules(currentManifest);
+          return;
+        }
         recordSliceHistory();
-        const [moved] = displayAssets.splice(sourceIndex, 1);
-        const targetIndexAfterMove = displayAssets.findIndex((asset) => asset.id === targetId);
-        displayAssets.splice(Math.max(0, targetIndexAfterMove + (before ? 0 : 1)), 0, moved);
-        assets.splice(0, assets.length, ...displayAssets.reverse());
-        renderCutModules(currentManifest, true);
+        assets.splice(0, assets.length, ...ordered);
+        renderCutModules(currentManifest);
         scheduleWorkspaceDraftSave();
+      }
+
+      // Moves a card and slides the cards it passes into their new places.
+      function moveCutItemAnimated(item, reference) {
+        const items = [...cutGrid.querySelectorAll(".cut-item")];
+        const before = new Map(items.map((card) => [card, card.offsetTop]));
+        cutGrid.insertBefore(item, reference);
+        for (const card of items) {
+          const delta = before.get(card) - card.offsetTop;
+          if (!delta || card === item) continue;
+          card.style.transition = "none";
+          card.style.transform = `translateY(${delta}px)`;
+          requestAnimationFrame(() => {
+            card.style.transition = "transform 160ms ease";
+            card.style.transform = "";
+          });
+        }
       }
 
       async function cropImageRegion(dataUrl, placement) {
@@ -5424,27 +5441,7 @@
         context.drawImage(source, 0, 0);
         const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
         const pixels = imageData.data;
-        const background = sampleEdgeColor(pixels, canvas.width, canvas.height);
-        const hardThreshold = 34;
-        const softThreshold = 82;
-
-        for (let index = 0; index < pixels.length; index += 4) {
-          const distance = colorDistance(
-            pixels[index],
-            pixels[index + 1],
-            pixels[index + 2],
-            background.r,
-            background.g,
-            background.b
-          );
-          if (distance <= hardThreshold) {
-            pixels[index + 3] = 0;
-          } else if (distance < softThreshold) {
-            const alphaRatio = (distance - hardThreshold) / (softThreshold - hardThreshold);
-            pixels[index + 3] = Math.round(pixels[index + 3] * alphaRatio);
-          }
-        }
-
+        removeEdgeBackgroundPixels(pixels, canvas.width, canvas.height);
         context.putImageData(imageData, 0, 0);
         return canvas.toDataURL("image/png");
       }
@@ -5538,7 +5535,8 @@
           ...(!asset.svgData && asset.dataUrl ? {
             dataUrl: await ensurePngOrJpegDataUrl(asset.dataUrl)
           } : {}),
-          selected: isSliceAssetIncludedForImport(asset)
+          selected: isSliceAssetIncludedForImport(asset),
+          parentId: findContainingSliceId(asset, activeImage.sliceManifest.assets.filter(isSliceAssetIncludedForImport))
         })));
         const previewDataUrl = await createRepairedPreviewImage(activeImage);
         return {
@@ -7429,6 +7427,115 @@
         return result;
       }
 
+      async function enterRepairPreview(activeImage) {
+        const card = resultGrid.querySelector(".result-card.slice-mode");
+        const image = card?.querySelector(".result-canvas img");
+        const layer = card?.querySelector(".slice-layer");
+        if (!image || !layer) return false;
+        repairPreviewButton.disabled = true;
+        setStatus(typeof t === "function" ? t("status_repair_preview_generating", "Generating inpaint preview...") : "Generating inpaint preview...");
+        try {
+          image.src = await createRepairedPreviewImage(activeImage);
+          repairPreviewActive = true;
+          layer.hidden = false;
+          renderSliceOverlay(card, layer, image);
+          repairPreviewButton.textContent = typeof t === "function" ? t("btn_exit_preview", "Exit Inpaint Preview") : "Exit Inpaint Preview";
+          return true;
+        } catch (error) {
+          setStatus(`Failed to generate completion preview: ${error.message || String(error)}`, "error");
+          return false;
+        } finally {
+          repairPreviewButton.disabled = false;
+        }
+      }
+
+      // A slice that fully contains other slices (a button around its icon) is re-cropped with those slices patched out,
+      // so the icon is not duplicated in the button image. Only untouched AI crops are changed.
+      async function patchContainedSlicesOut(activeImage, outerAssets) {
+        const allAssets = activeImage.sliceManifest.assets;
+        for (const outer of outerAssets) {
+          if (
+            outer.source !== "ai-bbox"
+            || outer.innerSlicesPatched
+            || outer.transparent
+            || outer.aiCompleted
+            || outer.aiRedrawn
+            || outer.svgData
+          ) continue;
+          const inners = allAssets.filter((asset) => asset !== outer && slicePlacementContains(outer.placement, asset.placement));
+          if (inners.length === 0) continue;
+          const { x, y, width, height } = outer.placement;
+          const source = await loadImageElement(activeImage.dataUrl);
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const context = canvas.getContext("2d");
+          context.drawImage(source, x, y, width, height, 0, 0, width, height);
+          for (const inner of inners) {
+            if (!inner.repairDataUrl) {
+              Object.assign(inner, await createSliceRepairPatch(activeImage.dataUrl, inner.placement));
+            }
+            const repair = await loadImageElement(inner.repairDataUrl);
+            context.drawImage(repair, inner.placement.x - x, inner.placement.y - y, inner.placement.width, inner.placement.height);
+          }
+          outer.originalDataUrl = canvas.toDataURL("image/png");
+          outer.dataUrl = outer.originalDataUrl;
+          outer.innerSlicesPatched = true;
+        }
+        renderCutModules(currentManifest);
+        scheduleWorkspaceDraftSave();
+      }
+
+      // Local alternative to AI background restore: patch every slice out with Preview Inpaint, then crop each background.
+      async function generateLocalFullBackgrounds() {
+        const activeImage = getActiveResultImage();
+        const review = activeImage
+          ? getCachedBackgroundDecomposition(activeImage.backgroundDecompositionCache, activeImage)
+          : null;
+        const backgrounds = (review?.backgrounds || []).filter((background) => background.enabled);
+        if (!activeImage || backgrounds.length === 0 || uiBusy) {
+          setStatus("Run AI Slice first to detect a background container.", "warning");
+          return;
+        }
+        genFullBackgroundButton.disabled = true;
+        try {
+          ensureImageSliceState(activeImage);
+          const overlayAssets = getMissingOverlaySliceCandidates(review, activeImage.sliceManifest.assets);
+          if (overlayAssets.length > 0) {
+            await appendDetectedSliceAssets(activeImage, overlayAssets, createAiProgressId("overlay_slices"));
+          }
+          await patchContainedSlicesOut(activeImage, activeImage.sliceManifest.assets);
+          if (repairPreviewActive && overlayAssets.length > 0) {
+            const previewImage = resultGrid.querySelector(".result-card.slice-mode .result-canvas img");
+            if (previewImage) previewImage.src = await createRepairedPreviewImage(activeImage);
+          } else if (!repairPreviewActive && !(await enterRepairPreview(activeImage))) {
+            return;
+          }
+          const backgroundAssets = [];
+          for (const background of backgrounds) {
+            backgroundAssets.push(await addSliceAsset(background.bbox, background.name));
+          }
+          await applyLocalTransparency(backgroundAssets.filter(Boolean));
+          renderCutModules(currentManifest);
+          scheduleWorkspaceDraftSave();
+          setStatus(`Added ${backgrounds.length} full background slice(s) from the inpaint preview.`, "success");
+        } catch (error) {
+          setStatus(`Full background failed: ${error.message || String(error)}`, "error");
+        } finally {
+          genFullBackgroundButton.disabled = false;
+        }
+      }
+
+      // The smallest other slice that fully contains this one, used to nest layers on import.
+      function findContainingSliceId(asset, assets) {
+        let best = null;
+        for (const other of assets) {
+          if (other === asset || other.id === asset.id || !slicePlacementContains(other.placement, asset.placement)) continue;
+          if (!best || other.placement.width * other.placement.height < best.placement.width * best.placement.height) best = other;
+        }
+        return best?.id || null;
+      }
+
       async function createRepairedPreviewImage(activeImage) {
         const assets = activeImage?.sliceManifest?.assets || [];
         if (!activeImage?.dataUrl) return "";
@@ -7447,6 +7554,9 @@
         if (assets.length === 0) return canvas.toDataURL("image/png");
 
         for (const asset of assets) {
+          // A slice inside another slice is already covered by the container patch; its own patch would
+          // paint the container color into the reference image and show through transparent children.
+          if (findContainingSliceId(asset, assets)) continue;
           if (!asset.repairDataUrl) {
             Object.assign(asset, await createSliceRepairPatch(activeImage.dataUrl, asset.placement));
           }
@@ -8031,6 +8141,8 @@
         modelConfigPurposeInputs.forEach((input) => {
           input.checked = input.value === purpose;
         });
+        const baseUrl = modelConfigBaseUrlInput.value.toLowerCase();
+        applyModelConfigSource(baseUrl.startsWith("cli://") ? baseUrl : "api", { resetValues: false });
         modelConfigDeleteButton.hidden = !config;
         applyModelConfigTestButtonState(modelConfigTestButton, config);
         closeEditedModelConfigOptions();
@@ -8045,6 +8157,32 @@
         modelConfigDialog.classList.add("open");
         modelConfigDialog.setAttribute("aria-hidden", "false");
         modelConfigNameInput.focus();
+      }
+
+      // CLI configs need no key and only support vision, so hide or lock what does not apply.
+      function applyModelConfigSource(source, { resetValues }) {
+        const isCli = source !== "api";
+        modelConfigSourceInputs.forEach((input) => {
+          input.checked = input.value === source;
+        });
+        modelConfigBaseUrlInput.closest("label").hidden = isCli;
+        modelConfigApiKeyInput.closest("label").hidden = isCli;
+        modelConfigCliHint.hidden = !isCli;
+        const visionInput = modelConfigPurposeInputs.find((input) => input.value === "vision");
+        const imageInput = modelConfigPurposeInputs.find((input) => input.value === "image");
+        imageInput.disabled = isCli;
+        if (isCli && imageInput.checked) {
+          visionInput.checked = true;
+          visionInput.dispatchEvent(new Event("change"));
+        }
+        if (!resetValues) return;
+        if (isCli) {
+          modelConfigBaseUrlInput.value = source;
+          modelConfigModelInput.value = "default";
+        } else if (/^cli:\/\//i.test(modelConfigBaseUrlInput.value)) {
+          modelConfigBaseUrlInput.value = "https://api.openai.com";
+          modelConfigModelInput.value = getModelPurposeDefaults(editingModelConfigPurpose).model;
+        }
       }
 
       function closeModelConfigEditor() {

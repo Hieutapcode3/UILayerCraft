@@ -2971,10 +2971,10 @@ select {
 
 .cut-item {
   display: grid;
-  grid-template-columns: 42px minmax(44px, 1fr) minmax(44px, 1fr) 28px 52px 24px;
+  grid-template-columns: 18px 42px minmax(44px, 1fr) minmax(44px, 1fr) 28px 52px 24px;
   grid-template-areas:
-    "thumb meta meta meta meta meta"
-    "thumb transparent svg visibility settings remove";
+    "handle thumb meta meta meta meta meta"
+    "handle thumb transparent svg visibility settings remove";
   gap: 6px;
   align-items: center;
   min-width: 0;
@@ -3611,17 +3611,24 @@ select {
   outline: none;
 }
 
-.cut-drop-indicator {
-  position: absolute;
-  right: 0;
-  left: 0;
-  z-index: 8;
-  height: 3px;
-  border-radius: 2px;
-  background: var(--brand);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9);
-  pointer-events: none;
+.cut-drag-handle {
+  grid-area: handle;
+  align-self: stretch;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: grab;
+  touch-action: none;
 }
+.cut-drag-handle:hover { background: var(--line); color: var(--ink-2); }
+.cut-drag-handle svg { width: 14px; height: 14px; }
+.cut-item.dragging { position: relative; z-index: 2; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25); }
+.cut-item.dragging .cut-drag-handle { cursor: grabbing; }
 
 .cut-item.reordered {
   animation: cut-item-reordered 240ms ease;
@@ -4527,6 +4534,10 @@ select {
 .model-config-tasks { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 13px; padding: 0; border: 0; }
 .model-config-tasks legend { margin-bottom: 7px; color: var(--ink-2); font-size: 10px; font-weight: 760; }
 .model-config-tasks label { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; }
+.model-config-source { margin: 0 0 11px; }
+.model-config-cli-hint { margin: 0 0 11px; color: var(--ink-2); font-size: 11px; }
+.model-config-cli-hint[hidden],
+.model-config-form-grid label[hidden] { display: none; }
 .task-route-title { display: inline-flex; align-items: center; gap: 5px; }
 .task-route-title .import-help {
   width: 18px;
