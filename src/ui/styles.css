@@ -143,6 +143,7 @@ button:disabled {
 
 .shell {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: 52px 1fr;
   width: 100vw;
   height: 100vh;
@@ -4424,14 +4425,15 @@ select {
 .model-route-picker-menu button:focus-visible { background: var(--surface-2); }
 .model-route-picker-menu button.selected { background: var(--success-soft); }
 .model-route-picker-empty { padding: 12px 9px; color: var(--muted); font-size: 10px; text-align: center; }
-.model-config-list { display: grid; gap: 12px; }
-.model-config-group { display: grid; gap: 8px; }
+/* minmax(0, 1fr): grid items default to min-width:auto, which lets the nowrap detail line push cards past the panel. */
+.model-config-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.model-config-group { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .model-config-group-title { color: var(--ink-2); font-size: 11px; font-weight: 820; }
-.model-config-group-list { display: grid; gap: 10px; }
+.model-config-group-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .model-config-empty { padding: 22px; border: 1px dashed var(--line-strong); border-radius: 10px; color: var(--muted); text-align: center; font-size: 12px; }
 .model-config-card { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 13px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); }
 .model-config-card.active { border-color: var(--success); background: var(--success-soft); }
-.model-config-card-main { min-width: 0; }
+.model-config-card-main { flex: 1 1 auto; min-width: 0; }
 .model-config-card-title { margin-bottom: 7px; color: var(--ink); font-size: 13px; font-weight: 820; }
 .model-config-detail { margin-top: 7px; overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .model-config-active-use { margin-top: 6px; color: var(--success); font-size: 10px; font-weight: 760; }
@@ -4798,7 +4800,9 @@ body.collapsed .new-work-trigger {
 
 /* Narrow window: once an image is loaded, give the canvas the generation column. */
 @media (max-width: 1040px) {
-  .step-label {
+  .step-label,
+  .stepper .step::before,
+  .brand span:last-child {
     display: none;
   }
 
@@ -4806,7 +4810,12 @@ body.collapsed .new-work-trigger {
     grid-template-columns: minmax(320px, 1fr) minmax(320px, 360px);
   }
 
+  /* display: contents keeps the fixed Settings/History panels that live inside the sidebar usable. */
   .sidebar.has-result {
+    display: contents;
+  }
+
+  .sidebar.has-result > :not(.settings-panel, .drafts-panel) {
     display: none;
   }
 }
