@@ -96,6 +96,41 @@ test("isolateSliceLayers flags a box that only grouped other layers as backgroun
   assert.deepEqual(results.slice(1).map((result) => result.backgroundOnly), [false, false, false, false]);
 });
 
+test("isolateSliceLayers keeps a text outline that shares its color with the ribbon border behind it", () => {
+  // Green ribbon with a brown border on a dark page; the title box overlaps the top border, and the cream
+  // lettering has a brown outline of the same color.
+  const BROWN = [64, 26, 1];
+  const CREAM = [248, 244, 233];
+  const ribbon = { x: 10, y: 20, width: 100, height: 60 };
+  const title = { x: 30, y: 21, width: 60, height: 30 };
+  const source = new Uint8ClampedArray(WIDTH * HEIGHT * 4);
+  for (let y = 0; y < HEIGHT; y += 1) {
+    for (let x = 0; x < WIDTH; x += 1) {
+      let color = DARK;
+      const inRibbon = x >= ribbon.x && x < ribbon.x + ribbon.width && y >= ribbon.y && y < ribbon.y + ribbon.height;
+      if (inRibbon) {
+        const border = x < ribbon.x + 3 || x >= ribbon.x + ribbon.width - 3 || y < ribbon.y + 3 || y >= ribbon.y + ribbon.height - 3;
+        color = border ? BROWN : GREEN;
+      }
+      if (x >= 40 && x < 80 && y >= 30 && y < 45) {
+        color = x < 42 || x >= 78 || y < 32 || y >= 43 ? BROWN : CREAM;
+      }
+      source.set([...color, 255], (y * WIDTH + x) * 4);
+    }
+  }
+  const layers = [
+    { placement: ribbon, shape: "free", kind: "illustration" },
+    { placement: title, shape: "free", kind: "text" }
+  ];
+  const [, titleResult] = isolateSliceLayers(source, WIDTH, HEIGHT, layers);
+  const layer = layers[1];
+  assert.equal(pixelAt(titleResult, layer, 40, 37)[3], 255, "left outline");
+  assert.equal(pixelAt(titleResult, layer, 60, 31)[3], 255, "top outline");
+  assert.equal(pixelAt(titleResult, layer, 60, 37)[3], 255, "fill");
+  assert.equal(pixelAt(titleResult, layer, 35, 37)[3], 0, "green ribbon");
+  assert.equal(pixelAt(titleResult, layer, 50, 21)[3], 0, "ribbon border at the box edge");
+});
+
 test("isolateSliceLayers reports how much of each layer was rebuilt under layers in front", () => {
   const { source, layers } = createScene();
   const [pill, coin, badge] = isolateSliceLayers(source, WIDTH, HEIGHT, layers);

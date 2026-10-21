@@ -154,3 +154,17 @@ test("edge background removal un-mixes the anti-aliased fringe", () => {
   assert.ok(colorDistance(pixels[index], pixels[index + 1], pixels[index + 2], ...BROWN) < 6);
   assert.equal(pixels[(6 * 12 + 6) * 4 + 3], 255);
 });
+
+test("edge background removal keeps a dark outline between the background and a light fill", () => {
+  // Cream lettering with a 2px brown outline on a green ribbon: the outline is not a cream/green blend.
+  const GREEN = [40, 150, 60];
+  const pixels = makeImage(20, 20, (x, y) => {
+    const ring = Math.max(Math.abs(x - 10), Math.abs(y - 10));
+    if (ring > 6) return GREEN;
+    return ring > 4 ? BROWN : CREAM;
+  });
+  removeEdgeBackgroundPixels(pixels, 20, 20);
+  assert.equal(pixels[3], 0);
+  for (const x of [4, 5]) assert.equal(pixels[(10 * 20 + x) * 4 + 3], 255, `outline x=${x}`);
+  assert.equal(pixels[(10 * 20 + 10) * 4 + 3], 255);
+});

@@ -249,36 +249,38 @@ function removeEdgeBackgroundPixels(pixels, width, height, { hardThreshold = 34,
   }
   return background;
 
-  // Alpha of a pixel blended between the background and the strongest nearby foreground color.
+  // Alpha of a pixel blended between the background and the nearby foreground color that explains it best.
+  // A pixel no blend explains (e.g. a dark outline between a green ribbon and cream text) is its own color.
   function estimateFringeAlpha(pixel) {
     const x0 = pixel % width;
     const y0 = Math.floor(pixel / width);
-    let best = null;
-    let bestDistance = softThreshold;
+    const index = pixel * 4;
+    const pr = original[index] - background.r;
+    const pg = original[index + 1] - background.g;
+    const pb = original[index + 2] - background.b;
+    const own = Math.sqrt(pr * pr + pg * pg + pb * pb);
+    let bestAlpha = null;
+    let bestResidual = hardThreshold;
     for (let y = Math.max(0, y0 - 2); y <= Math.min(height - 1, y0 + 2); y += 1) {
       for (let x = Math.max(0, x0 - 2); x <= Math.min(width - 1, x0 + 2); x += 1) {
         const other = y * width + x;
         if (state[other] === 1) continue;
         const distance = distanceAt(other);
-        if (distance > bestDistance) {
-          bestDistance = distance;
-          best = other;
+        if (distance < softThreshold || distance <= own) continue;
+        const fIndex = other * 4;
+        const fr = original[fIndex] - background.r;
+        const fg = original[fIndex + 1] - background.g;
+        const fb = original[fIndex + 2] - background.b;
+        const alpha = Math.min(1, Math.max(0, (pr * fr + pg * fg + pb * fb) / (distance * distance)));
+        const residual = colorDistance(pr, pg, pb, fr * alpha, fg * alpha, fb * alpha);
+        if (residual <= bestResidual) {
+          bestResidual = residual;
+          bestAlpha = alpha;
         }
       }
     }
-    const own = distanceAt(pixel);
-    if (best === null) {
-      return Math.min(1, Math.max(0, (own - hardThreshold) / (softThreshold - hardThreshold)));
-    }
-    const index = pixel * 4;
-    const fIndex = best * 4;
-    const fr = original[fIndex] - background.r;
-    const fg = original[fIndex + 1] - background.g;
-    const fb = original[fIndex + 2] - background.b;
-    const dot = (original[index] - background.r) * fr
-      + (original[index + 1] - background.g) * fg
-      + (original[index + 2] - background.b) * fb;
-    return Math.min(1, Math.max(0, dot / (bestDistance * bestDistance)));
+    if (bestAlpha !== null) return bestAlpha;
+    return Math.min(1, Math.max(0, (own - hardThreshold) / (softThreshold - hardThreshold)));
   }
 }
 

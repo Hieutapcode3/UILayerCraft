@@ -68,7 +68,8 @@ if %NODE_MAJOR% LSS 20 (
 echo Node.js version:
 node -v
 echo npm version:
-npm -v
+rem npm is npm.cmd; without call it never returns to this script.
+call npm -v
 echo.
 echo Installing or checking project dependencies...
 echo.

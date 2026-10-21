@@ -224,17 +224,20 @@ function collectLineOutsideColors(source, sourceWidth, sourceHeight, placement, 
 // Clears pixels connected to the crop edges whose original color (`crop`, before earlier passes un-mixed fringes)
 // matches one of `colors` or the outside color on their own row or column (`lineColors`), except protected ones.
 // Pixels hidden by layers in front (`state` 1) are rebuilt later, so the fill also starts from them and passes
-// through them: background seen around a front layer is reached too.
-function clearEdgeConnectedColors(pixels, crop, width, height, colors, lineColors, protect, state, tolerance = 34) {
+// through them: background seen around a front layer is reached too. Elsewhere the fill only steps between similar
+// colors, starting from an edge pixel only where its color goes on well outside the box (`farLineColors`): a text
+// outline cut by the box edge, or one that shares the color of a ribbon border behind it, is not background.
+function clearEdgeConnectedColors(pixels, crop, width, height, colors, lineColors, farLineColors, protect, state, tolerance = 34) {
   const total = width * height;
   const seen = new Uint8Array(total);
   const queue = new Int32Array(total);
   let head = 0;
   let tail = 0;
-  const visit = (pixel) => {
-    if (seen[pixel]) return;
-    seen[pixel] = 1;
-    if (protect[pixel]) return;
+  const cropColor = (pixel) => ({ r: crop[pixel * 4], g: crop[pixel * 4 + 1], b: crop[pixel * 4 + 2] });
+  // `previous` is the color the fill comes from; null (hidden pixels, edges off-screen or covered) allows any,
+  // false allows only pixels that are already transparent or hidden.
+  const visit = (pixel, previous) => {
+    if (seen[pixel] || protect[pixel]) return;
     const index = pixel * 4;
     const x = pixel % width;
     const matches = (color) => color && layerIsolationColorDistance(
@@ -242,29 +245,39 @@ function clearEdgeConnectedColors(pixels, crop, width, height, colors, lineColor
     ) <= backgroundTolerance(color, tolerance);
     const clear = pixels[index + 3] === 0
       || state[pixel] === 1
-      || colors.some(matches)
-      || lineColors.rows[(pixel - x) / width].some(matches)
-      || lineColors.columns[x].some(matches);
+      || (previous !== false && (!previous || matches(previous)) && (
+        colors.some(matches)
+        || lineColors.rows[(pixel - x) / width].some(matches)
+        || lineColors.columns[x].some(matches)
+      ));
+    // Not marked seen when blocked: a pixel of the same color, or another edge, may still reach it.
     if (!clear) return;
+    seen[pixel] = 1;
     pixels[index + 3] = 0;
     queue[tail++] = pixel;
   };
+  const edge = (near, far) => (
+    !near || !far || layerIsolationColorDistance(near.r, near.g, near.b, far.r, far.g, far.b) <= backgroundTolerance(near, tolerance)
+      ? near
+      : false
+  );
   for (let x = 0; x < width; x += 1) {
-    visit(x);
-    visit(total - width + x);
+    visit(x, edge(lineColors.columns[x][0], farLineColors.columns[x][0]));
+    visit(total - width + x, edge(lineColors.columns[x][1], farLineColors.columns[x][1]));
   }
   for (let y = 0; y < height; y += 1) {
-    visit(y * width);
-    visit(y * width + width - 1);
+    visit(y * width, edge(lineColors.rows[y][0], farLineColors.rows[y][0]));
+    visit(y * width + width - 1, edge(lineColors.rows[y][1], farLineColors.rows[y][1]));
   }
-  for (let pixel = 0; pixel < total; pixel += 1) if (state[pixel] === 1) visit(pixel);
+  for (let pixel = 0; pixel < total; pixel += 1) if (state[pixel] === 1) visit(pixel, null);
   while (head < tail) {
     const pixel = queue[head++];
     const x = pixel % width;
-    if (x > 0) visit(pixel - 1);
-    if (x < width - 1) visit(pixel + 1);
-    if (pixel >= width) visit(pixel - width);
-    if (pixel < total - width) visit(pixel + width);
+    const previous = state[pixel] === 1 ? null : cropColor(pixel);
+    if (x > 0) visit(pixel - 1, previous);
+    if (x < width - 1) visit(pixel + 1, previous);
+    if (pixel >= width) visit(pixel - width, previous);
+    if (pixel < total - width) visit(pixel + width, previous);
   }
 }
 
@@ -366,6 +379,7 @@ function isolateSliceLayers(source, sourceWidth, sourceHeight, layers) {
     clearEdgeConnectedColors(
       pixels, crop, width, height, outsideColors,
       collectLineOutsideColors(source, sourceWidth, sourceHeight, layer.placement, covered, ignored),
+      collectLineOutsideColors(source, sourceWidth, sourceHeight, layer.placement, covered, ignored, 12),
       protect,
       state
     );
