@@ -866,7 +866,8 @@ test("model settings expose two purposes, OpenAI-compatible fields, and one unif
   const serverSource = fs.readFileSync("server.js", "utf8");
 
   assert.doesNotMatch(template, /data-provider="openrouter"|Test image generation|Test inpainting|Test connection|Connection type|modelConfigType/);
-  assert.doesNotMatch(`${template}\n${appSource}\n${rendererSource}\n${serverSource}`, /codexCli|Codex CLI/);
+  assert.doesNotMatch(`${template}\n${appSource}\n${rendererSource}\n${serverSource}`, /codexCli/);
+  assert.match(template, /name="modelConfigSource" value="cli:\/\/codex"/);
   assert.match(rendererSource, /data-route-picker="\$\{task\}"/);
   assert.doesNotMatch(template, /id="taskRouteGeneration"|id="taskRouteInpaint"/);
   assert.match(template, /value="vision"[^>]*\/?>Vision Model/);

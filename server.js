@@ -18,6 +18,10 @@ const {
   validateModelConfigInput
 } = require("./src/server/config/model-config");
 const {
+  detectCliTools,
+  planCliTaskRouting
+} = require("./src/server/services/cli-setup");
+const {
   loadLocalConfig,
   saveLocalConfig: saveLocalConfigFile
 } = require("./src/server/storage/local-config-store");
@@ -238,7 +242,23 @@ async function createWorkspaceDraftThumbnail(draft) {
 server.listen(PORT, HOST, () => {
   console.log(`UILayerCraft API listening on http://${HOST}:${PORT}`);
   console.log(`Model configs: ${modelConfigState.modelConfigs.length}`);
+  setImmediate(routeTasksToInstalledClis);
 });
+
+// Tasks without a model go to logged-in CLIs: Claude reads images, Codex generates and edits them.
+function routeTasksToInstalledClis() {
+  try {
+    const tools = detectCliTools();
+    console.log(`AI CLIs: ${tools.map((tool) => `${tool.name} ${tool.loggedIn ? "ready" : tool.installed ? "not logged in" : "missing"}`).join(", ")}`);
+    const plan = planCliTaskRouting(modelConfigState, tools, createModelConfigId);
+    if (!plan) return;
+    mutateModelConfigState(() => plan.state).then(() => {
+      plan.assigned.forEach(({ cli, tasks }) => console.log(`Routed ${tasks.join(" + ")} to cli://${cli}`));
+    }).catch((error) => console.warn("Could not route tasks to CLIs:", error.message || String(error)));
+  } catch (error) {
+    console.warn("Could not check AI CLIs:", error.message || String(error));
+  }
+}
 
 let shutdownPromise = null;
 function shutdownServer() {

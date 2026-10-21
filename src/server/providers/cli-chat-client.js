@@ -30,6 +30,24 @@ const CLI_PRESETS = {
     ],
     imageInstruction: () => "",
     readOutput: (stdout) => JSON.parse(stdout.slice(stdout.indexOf("{"))).response
+  },
+  codex: {
+    models: ["default"],
+    // The prompt comes on stdin (no positional argument, so the repeatable -i flag cannot swallow it);
+    // codex exec prints only the final answer on stdout. The user's config.toml is ignored (login is still used)
+    // so a model or MCP server set there for coding cannot break these requests.
+    buildArgs: ({ model, files }) => [
+      "exec",
+      "--skip-git-repo-check",
+      "--ignore-user-config",
+      "--ephemeral",
+      "--color", "never",
+      "-s", "read-only",
+      ...(model && model !== "default" ? ["-m", model] : []),
+      ...files.flatMap((file) => ["-i", file])
+    ],
+    imageInstruction: () => "",
+    readOutput: (stdout) => stdout.trim()
   }
 };
 
@@ -171,5 +189,7 @@ module.exports = {
   callCliChatCompletion,
   flattenChatMessages,
   isCliBaseUrl,
-  listCliModels
+  listCliModels,
+  parseCliBaseUrl,
+  runCli
 };

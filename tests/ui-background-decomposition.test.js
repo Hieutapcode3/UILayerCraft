@@ -511,3 +511,24 @@ test("missing overlay slice candidates skip overlays that are already slices", (
   assert.deepEqual(candidates[0].bbox, { x: 290, y: 1006, width: 500, height: 190 });
   assert.deepEqual(getMissingOverlaySliceCandidates(toggleDecompositionBackground(review, "panel"), existing), []);
 });
+
+test("missing overlay slice candidates skip pieces of a slice and boxes around several slices", () => {
+  const review = createBackgroundDecompositionReview({
+    backgrounds: [{
+      id: "screen",
+      name: "level_map",
+      bbox: { x: 0, y: 0, width: 1080, height: 1920 },
+      overlays: [
+        { id: "overhang", name: "house_overhang", kind: "raster-overlay", bbox: { x: 436, y: 1644, width: 208, height: 56 } },
+        { id: "path", name: "level_path", kind: "raster-overlay", bbox: { x: 409, y: 0, width: 262, height: 1434 } },
+        { id: "banner", name: "event_banner", kind: "raster-overlay", bbox: { x: 40, y: 300, width: 300, height: 120 } }
+      ]
+    }]
+  }, { width: 1080, height: 1920 });
+  const existing = [
+    { placement: { x: 436, y: 1644, width: 208, height: 200 } },
+    { placement: { x: 428, y: 100, width: 228, height: 234 } },
+    { placement: { x: 428, y: 420, width: 228, height: 234 } }
+  ];
+  assert.deepEqual(getMissingOverlaySliceCandidates(review, existing).map((item) => item.name), ["event_banner"]);
+});

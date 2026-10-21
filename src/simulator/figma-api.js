@@ -39,6 +39,13 @@ function createSimulatorFigmaApi({ onPageChange } = {}) {
       return node;
     }
 
+    insertChild(index, node) {
+      this.appendChild(node);
+      this.children.splice(this.children.indexOf(node), 1);
+      this.children.splice(Math.max(0, Math.min(index, this.children.length)), 0, node);
+      return node;
+    }
+
     _removeChild(node) {
       const index = this.children.indexOf(node);
       if (index >= 0) this.children.splice(index, 1);
@@ -109,7 +116,8 @@ function createSimulatorFigmaApi({ onPageChange } = {}) {
         }
       };
     },
-    group(nodes, parent) {
+    // Like figma.group: the group takes `index` in the parent, so the layers keep their paint order.
+    group(nodes, parent, index) {
       const candidates = (nodes || []).filter((node) => node && !node.removed);
       if (!candidates.length) throw new Error("Cannot create an empty Figma group");
       const minX = Math.min(...candidates.map((node) => node.x));
@@ -121,7 +129,8 @@ function createSimulatorFigmaApi({ onPageChange } = {}) {
       group.x = minX;
       group.y = minY;
       group.resize(maxX - minX, maxY - minY);
-      parent.appendChild(group);
+      if (Number.isInteger(index)) parent.insertChild(index, group);
+      else parent.appendChild(group);
       for (const node of candidates) {
         node.x -= minX;
         node.y -= minY;

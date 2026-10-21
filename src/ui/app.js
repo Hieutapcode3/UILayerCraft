@@ -4453,6 +4453,7 @@
           id: `slice_ai_${batchId}_${index}`,
           name: String(detected.name || `slice_${String(index).padStart(2, "0")}`),
           kind: detected.kind,
+          shape: detected.shape || "free",
           type: "manual_slice",
           source: "ai-bbox",
           aiBatchId: batchId,
@@ -4689,12 +4690,16 @@
         }
         if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
         preparedAssets.forEach((asset) => placeSliceBelowContained(activeImage.sliceManifest.assets, asset));
-        await patchContainedSlicesOut(activeImage, preparedAssets);
-        await applyLocalTransparency(preparedAssets);
+        const backgroundOnly = await isolateDetectedSliceLayers(activeImage, preparedAssets);
+        for (const asset of backgroundOnly) {
+          activeImage.sliceManifest.assets.splice(activeImage.sliceManifest.assets.indexOf(asset), 1);
+          preparedAssets.splice(preparedAssets.indexOf(asset), 1);
+        }
         activeSliceId = preparedAssets.at(-1)?.id || activeSliceId;
         refreshSliceVisibility();
         renderCutModules(currentManifest);
         scheduleWorkspaceDraftSave();
+        fixRebuiltSlicesWithAi(preparedAssets.filter((asset) => asset.rebuiltRegion));
         return preparedAssets.length;
       }
 
@@ -4855,7 +4860,10 @@
         try {
           const restoreState = createSliceTransparencyRestoreState(asset);
           const sourceDataUrl = restoreState.dataUrl;
-          const transparentDataUrl = await removeEdgeBackground(sourceDataUrl);
+          // An untouched AI slice keeps its layer separation (layers behind and in front removed) when turned back on.
+          const transparentDataUrl = asset.layerTransparentDataUrl && sourceDataUrl === asset.originalDataUrl
+            ? asset.layerTransparentDataUrl
+            : await removeEdgeBackground(sourceDataUrl);
           recordSliceHistory();
           applySliceTransparencyResult(asset, {
             dataUrl: transparentDataUrl,
@@ -5600,14 +5608,55 @@
         return true;
       }
 
-      function hasConfiguredVisionAccess() {
-        const configId = modelConfigState.taskRouting.vision;
-        return Boolean(modelConfigState.modelConfigs.some((config) => (
+      // Slices whose hidden parts were guessed locally are redone by the image model when one is set up
+      // (for example cli://codex); the local guess stays restorable. Runs in the background after AI Slice.
+      async function fixRebuiltSlicesWithAi(assets) {
+        if (!assets.length || !hasConfiguredTaskAccess("inpaint")) return;
+        for (const [index, asset] of assets.entries()) {
+          if (!getActiveSliceAsset(asset.id)) continue;
+          const { name, layerTransparentDataUrl } = asset;
+          setStatus(`AI is fixing slice ${index + 1} / ${assets.length}: ${name}`, "info");
+          await makeSliceAiComplete(asset.id, [asset.rebuiltRegion]);
+          const fixed = getActiveSliceAsset(asset.id);
+          if (!fixed?.aiCompleted) continue;
+          // Keep only the fixed slice for import; the raw model output stays in the list, unselected.
+          for (const other of getActiveResultImage().sliceManifest.assets) {
+            if (other !== fixed && other.aiInpaintResultGroupId === fixed.aiInpaintResultGroupId) other.selected = false;
+          }
+          // The model only repaints colors: the layer keeps the shape found when it was separated, and its name.
+          applySliceTransparencyResult(fixed, { dataUrl: await applyAlphaFrom(fixed.dataUrl, layerTransparentDataUrl), ai: false });
+          fixed.name = name;
+          normalizeSliceAssetNames(getActiveResultImage().sliceManifest.assets);
+          renderCutModules(currentManifest);
+          scheduleWorkspaceDraftSave();
+        }
+        hideStatus();
+      }
+
+      async function applyAlphaFrom(dataUrl, alphaDataUrl) {
+        const image = await loadImageElement(dataUrl);
+        const canvas = document.createElement("canvas");
+        canvas.width = image.naturalWidth || image.width;
+        canvas.height = image.naturalHeight || image.height;
+        const context = canvas.getContext("2d");
+        context.drawImage(image, 0, 0);
+        context.globalCompositeOperation = "destination-in";
+        context.drawImage(await loadImageElement(alphaDataUrl), 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL("image/png");
+      }
+
+      function hasConfiguredTaskAccess(task) {
+        const configId = modelConfigState.taskRouting[task];
+        return modelConfigState.modelConfigs.some((config) => (
           config.id === configId
-          && config.tasks.includes("vision")
+          && config.tasks.includes(task)
           && String(config.model || "").trim()
           && (config.hasApiKey || /^cli:\/\//i.test(config.baseUrl || ""))
-        )));
+        ));
+      }
+
+      function hasConfiguredVisionAccess() {
+        return hasConfiguredTaskAccess("vision");
       }
 
       function toggleImportHelp(button) {
@@ -7486,6 +7535,53 @@
         scheduleWorkspaceDraftSave();
       }
 
+      // Separates new AI slices from each other in paint order (array order, back to front): parts hidden by slices
+      // in front are rebuilt, and the background and slices behind are made transparent. See slice-layer-isolation.js.
+      // Returns the new slices that turned out to be plain background (boxes that only grouped other slices).
+      async function isolateDetectedSliceLayers(activeImage, newAssets) {
+        const assets = activeImage.sliceManifest.assets;
+        const source = await loadImageElement(activeImage.dataUrl);
+        const width = source.naturalWidth || source.width;
+        const height = source.naturalHeight || source.height;
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        context.drawImage(source, 0, 0);
+        const results = isolateSliceLayers(
+          context.getImageData(0, 0, width, height).data,
+          width,
+          height,
+          assets.map((asset) => ({ placement: asset.placement, shape: asset.shape || "free", kind: asset.kind }))
+        );
+        const toDataUrl = (pixels, placement) => {
+          const crop = document.createElement("canvas");
+          crop.width = placement.width;
+          crop.height = placement.height;
+          crop.getContext("2d").putImageData(new ImageData(pixels, placement.width, placement.height), 0, 0);
+          return crop.toDataURL("image/png");
+        };
+        const backgroundOnly = [];
+        for (const asset of newAssets) {
+          const result = results[assets.indexOf(asset)];
+          if (!result) continue;
+          if (result.backgroundOnly) {
+            backgroundOnly.push(asset);
+            continue;
+          }
+          asset.originalDataUrl = toDataUrl(result.opaque, asset.placement);
+          asset.dataUrl = asset.originalDataUrl;
+          asset.innerSlicesPatched = true;
+          asset.layerTransparentDataUrl = toDataUrl(result.pixels, asset.placement);
+          // A slice with a sizeable part guessed under other slices is redone by the image model afterwards.
+          asset.rebuiltRegion = result.rebuiltRatio >= 0.1 && result.rebuiltRegion?.width >= 8 && result.rebuiltRegion?.height >= 8
+            ? result.rebuiltRegion
+            : null;
+          applySliceTransparencyResult(asset, { dataUrl: asset.layerTransparentDataUrl, ai: false });
+        }
+        return backgroundOnly;
+      }
+
       // Local alternative to AI background restore: patch every slice out with Preview Inpaint, then crop each background.
       async function generateLocalFullBackgrounds() {
         const activeImage = getActiveResultImage();
@@ -7553,27 +7649,22 @@
 
         if (assets.length === 0) return canvas.toDataURL("image/png");
 
+        // Fill exactly the pixels the slices show (their alpha, not their boxes), so nothing shows around round slices.
+        const maskCanvas = document.createElement("canvas");
+        maskCanvas.width = width;
+        maskCanvas.height = height;
+        const maskContext = maskCanvas.getContext("2d", { willReadFrequently: true });
         for (const asset of assets) {
-          // A slice inside another slice is already covered by the container patch; its own patch would
-          // paint the container color into the reference image and show through transparent children.
-          if (findContainingSliceId(asset, assets)) continue;
-          if (!asset.repairDataUrl) {
-            Object.assign(asset, await createSliceRepairPatch(activeImage.dataUrl, asset.placement));
-          }
-          const repair = await loadImageElement(asset.repairDataUrl);
-          context.drawImage(
-            repair,
-            0,
-            0,
-            repair.naturalWidth || repair.width,
-            repair.naturalHeight || repair.height,
-            asset.placement.x,
-            asset.placement.y,
-            asset.placement.width,
-            asset.placement.height
-          );
+          if (!asset.dataUrl) continue;
+          const image = await loadImageElement(asset.dataUrl);
+          maskContext.drawImage(image, asset.placement.x, asset.placement.y, asset.placement.width, asset.placement.height);
         }
-
+        const maskPixels = maskContext.getImageData(0, 0, width, height).data;
+        const mask = new Uint8Array(width * height);
+        for (let pixel = 0; pixel < mask.length; pixel += 1) mask[pixel] = maskPixels[pixel * 4 + 3] > 0 ? 1 : 0;
+        const imageData = context.getImageData(0, 0, width, height);
+        inpaintMaskedImage(imageData.data, width, height, mask);
+        context.putImageData(imageData, 0, 0);
         return canvas.toDataURL("image/png");
       }
 
@@ -8159,9 +8250,10 @@
         modelConfigNameInput.focus();
       }
 
-      // CLI configs need no key and only support vision, so hide or lock what does not apply.
+      // CLI configs need no key; Claude and Gemini CLIs only read images, Codex CLI can also generate them.
       function applyModelConfigSource(source, { resetValues }) {
         const isCli = source !== "api";
+        const visionOnly = isCli && source !== "cli://codex";
         modelConfigSourceInputs.forEach((input) => {
           input.checked = input.value === source;
         });
@@ -8170,8 +8262,8 @@
         modelConfigCliHint.hidden = !isCli;
         const visionInput = modelConfigPurposeInputs.find((input) => input.value === "vision");
         const imageInput = modelConfigPurposeInputs.find((input) => input.value === "image");
-        imageInput.disabled = isCli;
-        if (isCli && imageInput.checked) {
+        imageInput.disabled = visionOnly;
+        if (visionOnly && imageInput.checked) {
           visionInput.checked = true;
           visionInput.dispatchEvent(new Event("change"));
         }

@@ -390,19 +390,25 @@ function buildBackgroundRepairJobs(review) {
 }
 
 // Overlays (buttons, titles) that are not slices yet, so they can be cropped and patched out locally.
+// Overlays lying inside one slice (a piece of it) or enclosing several slices (a section box) are not new layers.
 function getMissingOverlaySliceCandidates(review, existingAssets, minOverlap = 0.6) {
   const boxes = (existingAssets || []).map((asset) => asset?.placement).filter(Boolean);
-  const overlapRatio = (a, b) => {
+  const sharedArea = (a, b) => {
     const shared = intersectDecompositionBoxes(a, b);
-    if (!shared) return 0;
-    const area = shared.width * shared.height;
-    return area / (a.width * a.height + b.width * b.height - area);
+    return shared ? shared.width * shared.height : 0;
   };
+  const overlapRatio = (a, b) => {
+    const area = sharedArea(a, b);
+    return area ? area / (a.width * a.height + b.width * b.height - area) : 0;
+  };
+  const isCovered = (overlay) => boxes.some((box) => (
+    overlapRatio(box, overlay) >= minOverlap || sharedArea(box, overlay) >= overlay.width * overlay.height * 0.9
+  )) || boxes.filter((box) => sharedArea(box, overlay) >= box.width * box.height * 0.9).length >= 2;
   const candidates = [];
   for (const background of review?.backgrounds || []) {
     if (!background.enabled) continue;
     for (const overlay of background.overlays || []) {
-      if (boxes.some((box) => overlapRatio(box, overlay.bbox) >= minOverlap)) continue;
+      if (isCovered(overlay.bbox)) continue;
       boxes.push(overlay.bbox);
       candidates.push({
         name: overlay.name,

@@ -120,8 +120,9 @@ function validateModelConfigInput(input = {}, options = {}) {
     input.timeoutMs !== undefined ? input.timeoutMs : secondsToMilliseconds(input.timeoutSeconds)
   );
   const baseUrl = normalizeBaseUrl(input.baseUrl);
-  if (/^cli:\/\//i.test(baseUrl) && !tasks.includes(MODEL_TASKS.VISION)) {
-    throw badRequest("CLI configs (cli://...) only support image understanding");
+  // Claude and Gemini CLIs only read images; Codex CLI can also generate and edit them.
+  if (/^cli:\/\//i.test(baseUrl) && !/^cli:\/\/codex$/i.test(baseUrl) && !tasks.includes(MODEL_TASKS.VISION)) {
+    throw badRequest("cli://claude and cli://gemini only support image understanding; use cli://codex for image generation");
   }
 
   return {
