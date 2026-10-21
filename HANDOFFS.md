@@ -122,3 +122,29 @@ Branch: `dev/Hieuthu3` (not merged into `main`).
 - UI made English-only; the language switcher was removed (the Vietnamese dictionary is kept in `i18n.js` for a future switch).
 - Removed an unused QR image, a manual Playwright probe and the old Chinese-named deploy scripts.
 - Added GitHub Actions CI and GITFLOW.md; pushed `main` and `dev/Hieuthu3` to `Hieutapcode3/UILayerCraft`. CI green on both.
+<!-- Tôi đã dừng vòng lặp. Cả ba phần đã làm xong, nhưng Codex trên máy bạn chưa tạo ra được ảnh thật. Vì vậy phần tạo/sửa ảnh tôi chỉ kiểm tra bằng một Codex giả lập.
+
+**1. Codex CLI tạo/sửa ảnh và tự sửa slice**
+- Settings → Connection có thêm lựa chọn **Codex CLI**, được dùng cho cả tạo ảnh và vẽ bù. Mọi tính năng ảnh có sẵn (tạo ảnh, sửa ảnh, vẽ bù nền, AI Complete) đều chạy qua Codex, không cần API key.
+- Sau AI Slice, slice nào có từ 10% diện tích phải tự vẽ bù (phần bị layer khác che) sẽ tự được gửi cho model vẽ bù sửa lại. Ảnh sửa giữ nguyên hình dạng và tên layer. Bản gốc của model vẫn nằm trong danh sách nhưng bỏ chọn, nên import không bị nhân đôi.
+- **Lý do chưa tạo được ảnh thật:** Codex đã đăng nhập bằng ChatGPT, nhưng khi chạy tự động nó báo công cụ tạo ảnh không dùng được cho tài khoản này. Tôi đã thử model mặc định, bật cờ `image_generation` và gọi `$imagegen`. Đường dự phòng của Codex cần `OPENAI_API_KEY`. Plugin sẽ hiện nguyên văn lý do Codex đưa ra. Nếu muốn có ảnh ngay, bạn dùng một cấu hình API ảnh như trước.
+
+**2. Bấm một lần trên máy mới**
+- `deploy-environment.bat` (Windows) và `.command` (Mac) giờ gọi `scripts/setup-clis.js`.
+- Script kiểm tra Claude, Codex, Gemini. CLI nào thiếu thì tự cài bằng `npm install -g`, CLI nào chưa đăng nhập thì tự mở terminal chạy lệnh đăng nhập.
+- Trên máy bạn: Claude sẵn sàng, Codex chưa có trong PATH, Gemini đã cài nhưng chưa đăng nhập. Tôi mới chạy chế độ chỉ kiểm tra; chế độ cài sẽ cài Codex và mở cửa sổ đăng nhập Gemini khi bạn chạy `deploy-environment.bat`.
+
+**3. Tự gán việc**
+- Khi server khởi động, việc nào chưa có model được gán tự động: đọc ảnh cho Claude (không có thì Gemini), tạo ảnh và vẽ bù cho Codex.
+- Việc bạn đã tự cấu hình thì giữ nguyên.
+
+**Kiểm thử**
+- `npm test` qua hết 634 test, đã build lại UI.
+- Chạy thật trên màn Home với Codex giả lập: server tự gán Claude và Codex đúng, 17 slice được tự sửa qua đủ đường UI → server → CLI, ghép lại trong Figma giả lập vẫn khớp ảnh gốc với 35 layer.
+- Lần chạy đầu phát hiện lỗi: sau khi tự sửa, thanh menu dưới bị xoá mất và tên layer bị đổi thành `..._local_composite`. Cả hai đã sửa và chạy lại thì ra kết quả trên.
+
+Server ở port 18787 cần tắt rồi chạy lại `npm run api` để dùng code mới. Code chưa commit, mục ghi chú đã thêm vào [HANDOFFS.md](HANDOFFS.md).
+
+Nguồn về tạo ảnh qua Codex CLI:
+- [Image Generation in Codex CLI](https://codex.danielvaughan.com/2026/04/27/codex-cli-image-generation-gpt-image-2-visual-development-workflows/)
+- [Working with Images in Codex CLI](https://codex.danielvaughan.com/2026/03/28/codex-cli-image-workflows/) -->
