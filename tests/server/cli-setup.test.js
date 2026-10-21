@@ -23,13 +23,23 @@ test("detectCliTools reports installed and logged-in CLIs", () => {
     }),
     env: {},
     homedir: "/home/test",
-    existsSync: () => false
+    readText: () => ""
   });
   assert.deepEqual(tools.map(({ name, installed, loggedIn, version }) => ({ name, installed, loggedIn, version })), [
     { name: "claude", installed: true, loggedIn: true, version: "2.1.302 (Claude Code)" },
     { name: "codex", installed: true, loggedIn: false, version: "codex-cli 0.163.0" },
     { name: "gemini", installed: true, loggedIn: false, version: "0.64.0" }
   ]);
+});
+
+test("detectCliTools counts Gemini as ready only with an API key, not a Google account sign-in", () => {
+  const spawnSyncImpl = fakeSpawnSync({ "gemini --version": { stdout: "0.65.0" } });
+  const gemini = (options) => detectCliTools({ spawnSyncImpl, homedir: "/home/test", ...options }).find((tool) => tool.name === "gemini");
+  // oauth_creds.json from a Google sign-in is no longer usable.
+  assert.equal(gemini({ env: {}, readText: () => "" }).loggedIn, false);
+  assert.equal(gemini({ env: { GEMINI_API_KEY: "key" }, readText: () => "" }).loggedIn, true);
+  assert.equal(gemini({ env: {}, readText: (file) => (/\.gemini[\\/]\.env$/.test(file) ? "GEMINI_API_KEY=abc\n" : "") }).loggedIn, true);
+  assert.equal(gemini({ env: {}, readText: () => "GEMINI_API_KEY=\n" }).loggedIn, false);
 });
 
 test("planCliTaskRouting gives unrouted tasks to Claude for reading and Codex for images", () => {

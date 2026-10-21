@@ -181,3 +181,14 @@ test("cli://codex configs may generate images and route image endpoints to the C
   const context = createModelRequestContext({ baseUrl: "cli://codex", model: "default", timeoutMs: 5000 });
   await assert.rejects(context.callJson("/v1/images/generations", {}), /Image prompt is empty/);
 });
+
+test("gemini CLI's Google-account error is replaced with how to switch to an API key", async () => {
+  await assert.rejects(
+    callCliChatCompletion(visionBody, {
+      baseUrl: "cli://gemini",
+      timeoutMs: 5000,
+      spawnImpl: fakeSpawn("Error authenticating: IneligibleTierError: This client is no longer supported for Gemini Code Assist for individuals.", [], 55)
+    }),
+    /no longer allows for Gemini CLI[\s\S]*aistudio\.google\.com\/apikey[\s\S]*GEMINI_API_KEY/
+  );
+});

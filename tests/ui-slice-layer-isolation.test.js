@@ -141,3 +141,74 @@ test("isolateSliceLayers reports how much of each layer was rebuilt under layers
   assert.equal(badge.rebuiltRatio, 0);
   assert.equal(badge.rebuiltRegion, null);
 });
+
+function paintScene(paint) {
+  const source = new Uint8ClampedArray(WIDTH * HEIGHT * 4);
+  for (let y = 0; y < HEIGHT; y += 1) {
+    for (let x = 0; x < WIDTH; x += 1) source.set([...paint(x, y), 255], (y * WIDTH + x) * 4);
+  }
+  return source;
+}
+
+test("isolateSliceLayers clears the button color inside a letter hole of a label", () => {
+  const WHITE = [255, 255, 255];
+  const button = { x: 10, y: 20, width: 100, height: 60 };
+  const label = { x: 40, y: 35, width: 40, height: 30 };
+  // A white "O" with a dark outline whose hole shows the green button.
+  const source = paintScene((x, y) => {
+    if (x < button.x || x >= button.x + button.width || y < button.y || y >= button.y + button.height) return DARK;
+    const r = Math.hypot(x + 0.5 - 60, y + 0.5 - 50);
+    if (r < 5) return GREEN;
+    if (r < 10) return WHITE;
+    if (r < 12) return DARK;
+    return GREEN;
+  });
+  const layers = [
+    { placement: button, shape: "free", kind: "button" },
+    { placement: label, shape: "free", kind: "text" }
+  ];
+  const [, result] = isolateSliceLayers(source, WIDTH, HEIGHT, layers);
+  assert.equal(pixelAt(result, layers[1], 60, 50)[3], 0, "hole");
+  assert.equal(pixelAt(result, layers[1], 67, 50)[3], 255, "letter");
+  assert.equal(pixelAt(result, layers[1], 71, 50)[3], 255, "outline");
+});
+
+test("isolateSliceLayers keeps a panel's inset that is only slightly darker than the panel behind it", () => {
+  const FRAME = [206, 227, 254];
+  const INSET = [182, 208, 250];
+  const frame = { x: 5, y: 5, width: 110, height: 90 };
+  const inset = { x: 20, y: 20, width: 80, height: 50 };
+  const source = paintScene((x, y) => {
+    const inFrame = x >= frame.x && x < frame.x + frame.width && y >= frame.y && y < frame.y + frame.height;
+    const inInset = x >= inset.x && x < inset.x + inset.width && y >= inset.y && y < inset.y + inset.height;
+    return inInset ? INSET : inFrame ? FRAME : DARK;
+  });
+  const layers = [
+    { placement: frame, shape: "free", kind: "panel" },
+    { placement: inset, shape: "free", kind: "panel" }
+  ];
+  const [, result] = isolateSliceLayers(source, WIDTH, HEIGHT, layers);
+  assert.equal(pixelAt(result, layers[1], 22, 22)[3], 255, "inset corner");
+  assert.equal(pixelAt(result, layers[1], 60, 45)[3], 255, "inset center");
+});
+
+test("isolateSliceLayers clears a round button's rim from an icon box centred on it", () => {
+  const WHITE = [255, 255, 255];
+  const RIM = [200, 220, 255];
+  const button = { x: 20, y: 10, width: 80, height: 80 };
+  const icon = { x: 30, y: 12, width: 60, height: 60 };
+  const source = paintScene((x, y) => {
+    const r = Math.hypot((x + 0.5 - 60) / 40, (y + 0.5 - 50) / 40);
+    if (r > 1) return DARK;
+    if (r > 0.88) return RIM;
+    if (Math.abs(x + 0.5 - 60) < 10 && Math.abs(y + 0.5 - 45) < 15) return WHITE;
+    return BLUE;
+  });
+  const layers = [
+    { placement: button, shape: "ellipse", kind: "button" },
+    { placement: icon, shape: "free", kind: "icon" }
+  ];
+  const [, result] = isolateSliceLayers(source, WIDTH, HEIGHT, layers);
+  assert.equal(pixelAt(result, layers[1], 60, 13)[3], 0, "rim at the top of the icon box");
+  assert.equal(pixelAt(result, layers[1], 60, 45)[3], 255, "icon");
+});

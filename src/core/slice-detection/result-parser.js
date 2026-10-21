@@ -71,7 +71,8 @@ function parseSliceAssetDetectionText(text, { width, height }) {
       reason: String(asset?.reason || "").trim().slice(0, 300)
     });
   });
-  return { assets: assets.filter((asset, index) => !isPartOfIllustration(asset, assets) && (
+  mergeContainerTabs(assets);
+  return { assets: assets.filter((asset, index) => !asset.mergedInto && !isPartOfIllustration(asset, assets) && (
     asset.kind === "progress-bar" || !assets.some((other, otherIndex) => (
       otherIndex !== index
       && other.kind !== "progress-bar"
@@ -79,6 +80,29 @@ function parseSliceAssetDetectionText(text, { width, height }) {
       && (!isCutOutPiece(other.bbox, asset.bbox) || otherIndex < index)
     ))
   )) };
+}
+
+// A panel overlapping a larger panel, within its width and sticking out above or below it, is that container's title
+// tab or ribbon: the container's box grows to include it and the tab is dropped, so the popup is one image.
+function mergeContainerTabs(assets, tolerance = 4) {
+  const panels = assets.filter((asset) => asset.kind === "panel")
+    .sort((a, b) => b.bbox.width * b.bbox.height - a.bbox.width * a.bbox.height);
+  for (const container of panels) {
+    if (container.mergedInto) continue;
+    for (const tab of panels) {
+      if (tab === container || tab.mergedInto) continue;
+      const box = container.bbox;
+      const other = tab.bbox;
+      const withinWidth = other.x >= box.x - tolerance && other.x + other.width <= box.x + box.width + tolerance;
+      const overlaps = other.y < box.y + box.height && other.y + other.height > box.y;
+      const sticksOut = other.y < box.y - tolerance || other.y + other.height > box.y + box.height + tolerance;
+      if (!withinWidth || !overlaps || !sticksOut) continue;
+      const top = Math.min(box.y, other.y);
+      const bottom = Math.max(box.y + box.height, other.y + other.height);
+      container.bbox = { ...box, y: top, height: bottom - top };
+      tab.mergedInto = container;
+    }
+  }
 }
 
 // A small picture lying (almost) entirely inside a larger illustration, like fruit in a truck bed, is part of it:

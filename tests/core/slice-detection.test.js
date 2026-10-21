@@ -177,3 +177,17 @@ test("parseSliceAssetDetectionText merges small pictures inside a larger illustr
 
   assert.deepEqual(result.assets.map((asset) => asset.name), ["truck", "apple_on_floor", "badge_text"]);
 });
+
+test("parseSliceAssetDetectionText merges a title tab sticking out of a popup into the popup", () => {
+  const result = parseSliceAssetDetectionText(JSON.stringify({
+    assets: [
+      { name: "popup_frame", kind: "panel", bbox: { x: 190, y: 651, width: 862, height: 727 } },
+      { name: "popup_title_tab", kind: "panel", bbox: { x: 315, y: 561, width: 607, height: 105 } },
+      { name: "title_text", kind: "text", bbox: { x: 499, y: 582, width: 244, height: 69 } },
+      { name: "selected_tab_highlight", kind: "panel", bbox: { x: 300, y: 700, width: 200, height: 100 } }
+    ]
+  }), { width: 1242, height: 2208 });
+
+  assert.deepEqual(result.assets.map((asset) => asset.name), ["popup_frame", "title_text", "selected_tab_highlight"]);
+  assert.deepEqual(result.assets[0].bbox, { x: 190, y: 561, width: 862, height: 817 });
+});

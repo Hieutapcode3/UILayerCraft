@@ -3653,7 +3653,7 @@
           if (!response.ok) {
             // A missing route has no error body; a 404 from the model provider (e.g. a retired model) does.
             if (response.status === 404 && !result.error) {
-              throw new Error("The local service is outdated. Close it and run the deploy-environment script again");
+              throw new Error("The local service is outdated. Close it and start it again from menu.bat (or deploy-environment.command)");
             }
             throw new Error(result.error || `AI slice analysis failed: ${response.status}`);
           }

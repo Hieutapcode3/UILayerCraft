@@ -1,5 +1,5 @@
 // Checks that the Claude, Codex and Gemini CLIs are installed and logged in. Missing CLIs are installed with npm,
-// and a terminal window is opened for each login that is still needed. Run by deploy-environment.bat/.command.
+// and a terminal window is opened for each login that is still needed. Run by menu.bat (option 1) and deploy-environment.command.
 // Usage: node scripts/setup-clis.js [--check]   (--check only reports, it installs and opens nothing)
 const { spawn, spawnSync } = require("node:child_process");
 const { CLI_TOOLS, detectCliTools } = require("../src/server/services/cli-setup");
@@ -23,6 +23,7 @@ function install(tool) {
 
 // Opens a new terminal window that runs the CLI's login, so the user can finish it in the browser.
 function openLoginTerminal(tool) {
+  if (tool.loginHint) console.log(`  ${tool.label}: ${tool.loginHint}`);
   const command = tool.loginCommand;
   if (process.platform === "win32") {
     spawn("cmd", ["/c", "start", `${tool.label} login`, "cmd", "/k", command], { detached: true, stdio: "ignore" }).unref();

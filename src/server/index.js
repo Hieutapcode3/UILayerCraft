@@ -8,7 +8,7 @@ const {
   buildBackgroundDecompositionPrompt,
   buildBackgroundDecompositionJsonRepairPrompt,
   parseUiDecompositionText
-} = require("./src/core/background-decomposition");
+} = require("../core/background-decomposition");
 const {
   createModelConfigId,
   createTaskConfigSnapshot,
@@ -16,82 +16,84 @@ const {
   resolveTaskConfig,
   summarizeModelConfig,
   validateModelConfigInput
-} = require("./src/server/config/model-config");
+} = require("./config/model-config");
 const {
   detectCliTools,
   planCliTaskRouting
-} = require("./src/server/services/cli-setup");
+} = require("./services/cli-setup");
 const {
   loadLocalConfig,
   saveLocalConfig: saveLocalConfigFile
-} = require("./src/server/storage/local-config-store");
+} = require("./storage/local-config-store");
 const {
   createWorkspaceDraftStore
-} = require("./src/server/storage/workspace-draft-store");
+} = require("./storage/workspace-draft-store");
 const {
   listProviderModels
-} = require("./src/server/providers/provider-http-client");
+} = require("./providers/provider-http-client");
 const {
   reconstructFastEditableHtml
-} = require("./src/server/services/fast-editable-html");
+} = require("./services/fast-editable-html");
 const {
   createModelRequestContext
-} = require("./src/server/services/model-request-context");
+} = require("./services/model-request-context");
 const {
   createPlaywrightFigmaCaptureService
-} = require("./src/server/services/playwright-figma-capture");
+} = require("./services/playwright-figma-capture");
 const {
   requestUiDecompositionText
-} = require("./src/server/services/ui-decomposition-request");
+} = require("./services/ui-decomposition-request");
 const {
   testModelConfig
-} = require("./src/server/services/model-config-tester");
+} = require("./services/model-config-tester");
 const {
   requestWithTransparentBackgroundFallback
-} = require("./src/server/services/transparent-image-request");
+} = require("./services/transparent-image-request");
 const {
   sanitizeFastGeneratedHtml
-} = require("./src/server/services/fast-html-sanitizer");
+} = require("./services/fast-html-sanitizer");
 const {
   createAiInpaintCapabilityFixture,
   createNativeInpaintForm,
   prepareAiInpaintInputs,
   restoreAiInpaintImage,
   runAiInpaintRoute
-} = require("./src/server/services/ai-inpaint");
+} = require("./services/ai-inpaint");
 const {
   createWorkspaceRoutes
-} = require("./src/server/routes/workspace-routes");
+} = require("./routes/workspace-routes");
 const {
   createProgressRoutes
-} = require("./src/server/routes/progress-routes");
+} = require("./routes/progress-routes");
 const {
   createImageRoutes
-} = require("./src/server/routes/image-routes");
+} = require("./routes/image-routes");
 const {
   createAssetRoutes
-} = require("./src/server/routes/asset-routes");
+} = require("./routes/asset-routes");
 const {
   createDesignRoutes
-} = require("./src/server/routes/design-routes");
+} = require("./routes/design-routes");
 const {
   createModelConfigRoutes
-} = require("./src/server/routes/model-config-routes");
+} = require("./routes/model-config-routes");
 const {
   exportFigManifest
-} = require("./src/fig-export/export-fig");
+} = require("../fig-export/export-fig");
 
 const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 18787);
-const CONFIG_FILE = path.join(__dirname, ".local-provider-config.json");
-const WORKSPACE_HISTORY_DIR = path.join(__dirname, ".uilayercraft-history");
-const LEGACY_WORKSPACE_HISTORY_DIR = path.join(__dirname, ".image-to-slice-history");
+// Local data and vendor files live at the repository root, two folders up.
+const PROJECT_ROOT = path.resolve(__dirname, "..", "..");
+const CONFIG_FILE = path.join(PROJECT_ROOT, ".local-provider-config.json");
+const WORKSPACE_HISTORY_DIR = path.join(PROJECT_ROOT, ".uilayercraft-history");
+const LEGACY_WORKSPACE_HISTORY_DIR = path.join(PROJECT_ROOT, ".image-to-slice-history");
 // Keep drafts saved before the rename by moving the old history folder once.
 if (!fs.existsSync(WORKSPACE_HISTORY_DIR) && fs.existsSync(LEGACY_WORKSPACE_HISTORY_DIR)) {
   fs.renameSync(LEGACY_WORKSPACE_HISTORY_DIR, WORKSPACE_HISTORY_DIR);
 }
 const FIGMA_CAPTURE_RUNTIME = fs.readFileSync(
-  path.join(__dirname, "src/vendor/figma-capture.js"),
+  path.join(PROJECT_ROOT, "src/vendor/figma-capture.js"),
   "utf8"
 );
 const playwrightFigmaCaptureService = createPlaywrightFigmaCaptureService({

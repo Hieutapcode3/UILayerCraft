@@ -31,8 +31,11 @@ const CLI_TOOLS = [
     label: "Gemini CLI",
     npmPackage: "@google/gemini-cli",
     loginCommand: "gemini",
-    isLoggedIn: ({ env, homedir, existsSync }) => Boolean(env.GEMINI_API_KEY || env.GOOGLE_API_KEY)
-      || existsSync(path.join(homedir, ".gemini", "oauth_creds.json"))
+    // Google no longer lets Gemini CLI run on a personal Google account sign-in (IneligibleTierError), so only an
+    // API key counts: in the environment or in ~/.gemini/.env, which the CLI loads itself.
+    loginHint: "Gemini CLI now needs an API key: create one at https://aistudio.google.com/apikey, save it as GEMINI_API_KEY=<key> in ~/.gemini/.env, then run gemini once and choose \"Use Gemini API key\" under /auth.",
+    isLoggedIn: ({ env, homedir, readText }) => Boolean(env.GEMINI_API_KEY || env.GOOGLE_API_KEY)
+      || /^\s*(GEMINI_API_KEY|GOOGLE_API_KEY)\s*=\s*\S/m.test(readText(path.join(homedir, ".gemini", ".env")))
   }
 ];
 
@@ -54,7 +57,7 @@ function detectCliTools({
   spawnSyncImpl = spawnSync,
   env = process.env,
   homedir = os.homedir(),
-  existsSync = fs.existsSync
+  readText = (file) => (fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "")
 } = {}) {
   const run = (command, args) => runCommand(command, args, { spawnSyncImpl });
   return CLI_TOOLS.map((tool) => {
@@ -65,7 +68,7 @@ function detectCliTools({
       label: tool.label,
       installed,
       version: installed ? version.stdout.trim().split(/\r?\n/)[0] : "",
-      loggedIn: installed && tool.isLoggedIn({ run, env, homedir, existsSync })
+      loggedIn: installed && tool.isLoggedIn({ run, env, homedir, readText })
     };
   });
 }

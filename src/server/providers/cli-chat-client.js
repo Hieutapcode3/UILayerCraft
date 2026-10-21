@@ -117,6 +117,15 @@ async function callCliChatCompletion(body, {
     const stdin = [instruction, prompt].filter(Boolean).join("\n\n");
     const stdout = await runCli(name, preset.buildArgs({ model, files }), stdin, {
       cwd: workDir, timeoutMs, signal, createAbortError, spawnImpl
+    }).catch((error) => {
+      if (name === "gemini" && /IneligibleTierError|no longer supported for Gemini Code Assist/i.test(error.message)) {
+        throw Object.assign(new Error(
+          "Gemini CLI is signed in with a Google account, which Google no longer allows for Gemini CLI. "
+          + "Create an API key at https://aistudio.google.com/apikey, save it as GEMINI_API_KEY=<key> in ~/.gemini/.env, "
+          + "run gemini once and choose \"Use Gemini API key\" under /auth, then restart the local API. Or use Claude CLI."
+        ), { statusCode: 502 });
+      }
+      throw error;
     });
     let content;
     try {
