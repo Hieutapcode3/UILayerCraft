@@ -1,4 +1,4 @@
-const { spawn } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
@@ -142,6 +142,20 @@ async function callCliChatCompletion(body, {
   }
 }
 
+// child.kill() only ends the cmd.exe shell on Windows and leaves the real CLI (and its children) running,
+// so a timeout or Cancel would never free the slot. taskkill /T ends the whole process tree.
+function killCliProcess(child, { platform = process.platform, spawnSyncImpl = spawnSync } = {}) {
+  if (platform === "win32" && child?.pid) {
+    try {
+      spawnSyncImpl("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
+      return;
+    } catch {
+      // fall through to the plain kill
+    }
+  }
+  try { child.kill(); } catch { /* already gone */ }
+}
+
 function runCli(command, args, stdin, { cwd, timeoutMs, signal, createAbortError, spawnImpl }) {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
@@ -165,11 +179,11 @@ function runCli(command, args, stdin, { cwd, timeoutMs, signal, createAbortError
       else resolve(value);
     };
     const onAbort = () => {
-      child.kill();
+      killCliProcess(child);
       finish(createAbortError("AI request cancelled"));
     };
     const timer = setTimeout(() => {
-      child.kill();
+      killCliProcess(child);
       finish(Object.assign(new Error(`${command} CLI timed out after ${Math.round(timeoutMs / 1000)} seconds`), { statusCode: 504 }));
     }, timeoutMs);
     signal?.addEventListener("abort", onAbort, { once: true });
@@ -198,6 +212,7 @@ module.exports = {
   callCliChatCompletion,
   flattenChatMessages,
   isCliBaseUrl,
+  killCliProcess,
   listCliModels,
   parseCliBaseUrl,
   runCli

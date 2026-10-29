@@ -81,6 +81,9 @@ const {
   exportFigManifest
 } = require("../fig-export/export-fig");
 
+const { createSharpImageOps, upscaleSliceAsset } = require("./services/asset-upscale");
+const { requestImageOptions } = require("./services/image-options");
+
 const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 18787);
 // Local data and vendor files live at the repository root, two folders up.
@@ -430,70 +433,62 @@ function failAiProgress(progressId, message) {
   finishAiProgress(progressId, "failed", message);
 }
 
+// payload.count (1-4) design options, requested at the same time.
 async function generateImage(payload, requestContext) {
   const config = requestContext.config;
-  const prompt = buildRequestedAspectPrompt(
+  const basePrompt = buildRequestedAspectPrompt(
     buildUiScreenshotPrompt(assertString(payload.prompt, "prompt")),
     payload.width,
     payload.height
   );
-  const count = 1;
-  const body = {
-    model: config.model,
-    prompt,
-    size: toProviderImageSize(payload.width, payload.height, config),
-    quality: payload.quality || "high",
-    output_format: payload.outputFormat || "png",
-    background: payload.background || "opaque",
-    n: count
-  };
-
-  const data = await requestContext.callJson("/v1/images/generations", body);
-  return {
-    ...(await normalizeImageResponse(data)),
-    provider: {
-      baseUrl: config.baseUrl,
+  const size = toProviderImageSize(payload.width, payload.height, config);
+  return requestImageOptions(basePrompt, payload.count, async (prompt) => {
+    const data = await requestContext.callJson("/v1/images/generations", {
       model: config.model,
-      size: body.size
-    }
-  };
+      prompt,
+      size,
+      quality: payload.quality || "high",
+      output_format: payload.outputFormat || "png",
+      background: payload.background || "opaque",
+      n: 1
+    });
+    return {
+      ...(await normalizeImageResponse(data)),
+      provider: { baseUrl: config.baseUrl, model: config.model, size }
+    };
+  });
 }
 
 async function editImage(payload, requestContext) {
   const config = requestContext.config;
-  const prompt = buildRequestedAspectPrompt(
+  const basePrompt = buildRequestedAspectPrompt(
     buildUiScreenshotPrompt(assertString(payload.prompt, "prompt")),
     payload.width,
     payload.height
   );
-  const count = 1;
   const images = Array.isArray(payload.images) ? payload.images : [];
   if (images.length === 0) {
     throw badRequest("images must contain at least one data URL image");
   }
-  const form = new FormData();
-  form.set("model", config.model);
-  form.set("prompt", prompt);
-  form.set("size", toProviderImageSize(payload.width, payload.height, config));
-  form.set("quality", payload.quality || "high");
-  form.set("output_format", payload.outputFormat || "png");
-  form.set("background", payload.background || "opaque");
-  form.set("n", String(count));
-
-  images.slice(0, 16).forEach((image, index) => {
-    const file = dataUrlToFile(image.dataUrl, image.name || `reference-${index + 1}.png`);
-    form.append("image[]", file);
+  const size = toProviderImageSize(payload.width, payload.height, config);
+  return requestImageOptions(basePrompt, payload.count, async (prompt) => {
+    const form = new FormData();
+    form.set("model", config.model);
+    form.set("prompt", prompt);
+    form.set("size", size);
+    form.set("quality", payload.quality || "high");
+    form.set("output_format", payload.outputFormat || "png");
+    form.set("background", payload.background || "opaque");
+    form.set("n", "1");
+    images.slice(0, 16).forEach((image, index) => {
+      form.append("image[]", dataUrlToFile(image.dataUrl, image.name || `reference-${index + 1}.png`));
+    });
+    const data = await requestContext.callForm("/v1/images/edits", form);
+    return {
+      ...(await normalizeImageResponse(data)),
+      provider: { baseUrl: config.baseUrl, model: config.model, size }
+    };
   });
-
-  const data = await requestContext.callForm("/v1/images/edits", form);
-  return {
-    ...(await normalizeImageResponse(data)),
-    provider: {
-      baseUrl: config.baseUrl,
-      model: config.model,
-      size: toProviderImageSize(payload.width, payload.height, config)
-    }
-  };
 }
 
 async function generateTransparentAsset(payload, requestContext) {
@@ -521,6 +516,15 @@ async function generateTransparentAsset(payload, requestContext) {
 }
 
 async function redrawAsset(payload, requestContext) {
+  if (payload.mode === "upscale") {
+    return upscaleSliceAsset(payload, requestContext, {
+      imageOps: createSharpImageOps(await loadSharpModule()),
+      // CLI providers (cli://codex) choose their own canvas; an API gets the closest supported size.
+      toImageSize: (width, height, config) => (/^cli:\/\//i.test(config?.baseUrl || "") ? "" : toOpenAIImageSize(width, height)),
+      dataUrlToFile,
+      normalizeImageResponse
+    });
+  }
   const config = requestContext.config;
   const dataUrl = assertString(payload.dataUrl, "dataUrl");
   const maskDataUrl = payload.maskDataUrl;

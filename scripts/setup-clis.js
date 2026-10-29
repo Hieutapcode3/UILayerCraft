@@ -1,5 +1,6 @@
 // Checks that the Claude, Codex and Gemini CLIs are installed and logged in. Missing CLIs are installed with npm,
-// and a terminal window is opened for each login that is still needed. Run by menu.bat (option 1) and deploy-environment.command.
+// and a terminal window is opened for each login that is still needed. Also shows which account each logged-in CLI uses.
+// Run by start.bat (options 1 and 3) and deploy-environment.command.
 // Usage: node scripts/setup-clis.js [--check]   (--check only reports, it installs and opens nothing)
 const { spawn, spawnSync } = require("node:child_process");
 const { CLI_TOOLS, detectCliTools } = require("../src/server/services/cli-setup");
@@ -10,6 +11,7 @@ function printStatus(tools) {
   for (const tool of tools) {
     const state = !tool.installed ? "not installed" : tool.loggedIn ? "ready" : "installed, not logged in";
     console.log(`  ${tool.label.padEnd(12)} ${state}${tool.version ? `  (${tool.version})` : ""}`);
+    if (tool.loggedIn) console.log(`  ${"".padEnd(12)} account: ${tool.account || "unknown (could not read the account)"}`);
   }
 }
 
@@ -38,14 +40,14 @@ function openLoginTerminal(tool) {
 }
 
 console.log("Checking AI CLIs (Claude reads images, Codex generates and edits images, Gemini is a fallback)...");
-let tools = detectCliTools();
+let tools = detectCliTools({ withAccounts: true });
 printStatus(tools);
 
 if (!checkOnly) {
   const missing = tools.filter((tool) => !tool.installed);
   for (const tool of missing) install(CLI_TOOLS.find((item) => item.name === tool.name));
   if (missing.length) {
-    tools = detectCliTools();
+    tools = detectCliTools({ withAccounts: true });
     console.log("\nAfter installing:");
     printStatus(tools);
   }

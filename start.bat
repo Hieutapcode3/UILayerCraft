@@ -64,12 +64,7 @@ goto done
 
 :status
 echo.
-echo --- Claude Code ---
-call claude auth status
-echo.
-echo --- Codex CLI ---
-call codex login status
-echo.
+rem Installed / logged-in state and the account (email) each CLI uses; see scripts\setup-clis.js.
 call node scripts\setup-clis.js --check
 goto done
 

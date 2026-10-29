@@ -2,10 +2,12 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
+  assessSliceHandoff,
   averageBackgroundColors,
   averageColors,
   colorDistance,
   getPixelColor,
+  measureSharpness,
   mixColors,
   pickEdgeBackgroundColor,
   removeEdgeBackgroundPixels,
@@ -167,4 +169,71 @@ test("edge background removal keeps a dark outline between the background and a 
   assert.equal(pixels[3], 0);
   for (const x of [4, 5]) assert.equal(pixels[(10 * 20 + x) * 4 + 3], 255, `outline x=${x}`);
   assert.equal(pixels[(10 * 20 + 10) * 4 + 3], 255);
+});
+
+// 64 x 64 slice: dark left half, light right half. `softness` is the width of a logistic blur on the step
+// (0 = crisp step); a large value turns it into a gentle gradient fill.
+function stepImage(softness, { alpha = 255 } = {}) {
+  const size = 64;
+  const pixels = new Uint8ClampedArray(size * size * 4);
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const t = softness <= 0 ? (x < size / 2 ? 0 : 1) : 1 / (1 + Math.exp(-(x - size / 2) / softness));
+      const value = 40 + 180 * t;
+      pixels.set([value, value, value, alpha], (y * size + x) * 4);
+    }
+  }
+  return { pixels, size };
+}
+
+test("measureSharpness flags soft edges but not crisp edges, smooth ramps, flat fills or empty slices", () => {
+  const check = ({ pixels, size }) => measureSharpness(pixels, size, size).blurry;
+  assert.equal(check(stepImage(0)), false);
+  assert.equal(check(stepImage(0.4)), false);
+  assert.equal(check(stepImage(2.5)), true);
+  // A gentle gradient fill has no edge to be blurry about.
+  assert.equal(check(stepImage(400)), false);
+  assert.equal(measureSharpness(new Uint8ClampedArray(64 * 64 * 4).fill(180), 64, 64).blurry, false);
+  assert.equal(check(stepImage(2.5, { alpha: 0 })), false);
+});
+
+function rgbaImage(width, height, paint) {
+  const pixels = new Uint8ClampedArray(width * height * 4);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) pixels.set(paint(x, y), (y * width + x) * 4);
+  }
+  return pixels;
+}
+
+test("assessSliceHandoff passes a clean, large enough asset and lists what an artist would reject", () => {
+  const clean = rgbaImage(80, 80, (x, y) => (x >= 10 && x < 70 && y >= 10 && y < 70 ? [30, 40, 120, 255] : [0, 0, 0, 0]));
+  assert.deepEqual(assessSliceHandoff(clean, 80, 80, { scale: 4, screenShortSide: 20 }), { status: "ready", issues: [] });
+
+  const codes = (pixels, options) => assessSliceHandoff(pixels, 80, 80, options).issues.map((issue) => issue.code);
+  // Small on screen and only 1x: too low resolution. A big element at 1x is fine.
+  assert.deepEqual(codes(clean, { scale: 1, screenShortSide: 80 }), ["low-resolution"]);
+  assert.deepEqual(codes(clean, { scale: 1, screenShortSide: 400 }), []);
+
+  const specks = rgbaImage(80, 80, (x, y) => {
+    if (x >= 10 && x < 70 && y >= 10 && y < 70) return [30, 40, 120, 255];
+    return (x === 3 && y === 3) || (x === 76 && y === 40) ? [250, 230, 180, 255] : [0, 0, 0, 0];
+  });
+  assert.deepEqual(codes(specks, { scale: 4 }), ["specks"]);
+
+  // A rim in the color seen around the slice (yellow button behind an icon) is leftover background.
+  const rim = rgbaImage(80, 80, (x, y) => {
+    if (x >= 12 && x < 68 && y >= 12 && y < 68) return [30, 40, 120, 255];
+    if (x >= 10 && x < 70 && y >= 10 && y < 70) return [240, 190, 40, 255];
+    return [0, 0, 0, 0];
+  });
+  assert.ok(codes(rim, { scale: 4, outsideColors: [[238, 188, 44]] }).includes("leftover-background"));
+  assert.ok(!codes(rim, { scale: 4, outsideColors: [[250, 240, 220]] }).includes("leftover-background"));
+
+  const full = rgbaImage(80, 80, () => [30, 40, 120, 255]);
+  assert.ok(codes(full, { scale: 4 }).includes("edge-cut"));
+  // A slice the model recreated on a key color has no old background, and fills its box on purpose.
+  assert.ok(!codes(rim, { scale: 4, outsideColors: [[238, 188, 44]], recreated: true }).includes("leftover-background"));
+  assert.deepEqual(codes(full, { scale: 4, recreated: true }), []);
+  assert.equal(assessSliceHandoff(new Uint8ClampedArray(80 * 80 * 4), 80, 80).status, "fix");
+  assert.equal(assessSliceHandoff(clean, 80, 80, { scale: 4, blurry: true }).status, "fix");
 });

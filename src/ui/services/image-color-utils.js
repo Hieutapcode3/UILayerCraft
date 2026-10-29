@@ -284,12 +284,159 @@ function removeEdgeBackgroundPixels(pixels, width, height, { hardThreshold = 34,
   }
 }
 
+// Heuristic blur check for a (small) RGBA slice: soft edges have a gradient but a weak Laplacian next to it,
+// while crisp edges and smooth gradient fills do not. Callers shrink big slices to about 160 px first.
+function measureSharpness(pixels, width, height, { minPixels = 64, minEdgeGradient = 12, blurRatio = 0.35 } = {}) {
+  const luma = new Float32Array(width * height);
+  const opaque = new Uint8Array(width * height);
+  for (let i = 0; i < width * height; i += 1) {
+    const o = i * 4;
+    opaque[i] = pixels[o + 3] >= 200 ? 1 : 0;
+    luma[i] = 0.299 * pixels[o] + 0.587 * pixels[o + 1] + 0.114 * pixels[o + 2];
+  }
+  const lapHist = new Uint32Array(256);
+  const gradHist = new Uint32Array(256);
+  let count = 0;
+  let sum = 0;
+  let sumSquares = 0;
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      const i = y * width + x;
+      if (!opaque[i] || !opaque[i - 1] || !opaque[i + 1] || !opaque[i - width] || !opaque[i + width]) continue;
+      const lap = Math.abs(4 * luma[i] - luma[i - 1] - luma[i + 1] - luma[i - width] - luma[i + width]);
+      const gx = (luma[i + 1] - luma[i - 1]) / 2;
+      const gy = (luma[i + width] - luma[i - width]) / 2;
+      lapHist[Math.min(255, Math.round(lap))] += 1;
+      gradHist[Math.min(255, Math.round(Math.hypot(gx, gy)))] += 1;
+      count += 1;
+      sum += luma[i];
+      sumSquares += luma[i] * luma[i];
+    }
+  }
+  if (count < minPixels) return { count, detail: 0, edgeGradient: 0, edgeLaplacian: 0, blurry: false };
+  const percentile = (hist, share) => {
+    let seen = 0;
+    for (let value = 0; value < 256; value += 1) {
+      seen += hist[value];
+      if (seen >= count * share) return value;
+    }
+    return 255;
+  };
+  const mean = sum / count;
+  const detail = Math.sqrt(Math.max(0, sumSquares / count - mean * mean));
+  const edgeGradient = percentile(gradHist, 0.995);
+  const edgeLaplacian = percentile(lapHist, 0.995);
+  return {
+    count,
+    detail,
+    edgeGradient,
+    edgeLaplacian,
+    blurry: edgeGradient >= minEdgeGradient && edgeLaplacian / edgeGradient < blurRatio
+  };
+}
+
+// Hand-off check an artist would do before giving a slice to a developer (Figma, then Unity): enough resolution,
+// no stray specks or haze, no halo of the old background, not cut off by the slice box. `scale` is the slice's pixel
+// width divided by its on-screen width (4 after an AI upscale). Returns { status: "ready" | "check" | "fix", issues }.
+// `outsideColors` ([r, g, b] seen around the slice in the original image) find edges made of leftover background.
+// Small elements (short side under `smallSide` on screen) need `minScale` times their size in pixels to stay crisp.
+// `recreated` (drawn by the model on a key color and fitted to the box): no old background can be left and the
+// content touches the box by design, so those two checks are skipped.
+function assessSliceHandoff(pixels, width, height, { scale = 1, minScale = 2, smallSide = 160, screenShortSide = Infinity, blurry = false, outsideColors = [], recreated = false } = {}) {
+  const issues = [];
+  const add = (code, severity, message) => issues.push({ code, severity, message });
+  const total = width * height;
+  const label = new Int32Array(total).fill(-1);
+  const sizes = [];
+  const stack = [];
+  let partial = 0;
+  let visible = 0;
+  for (let start = 0; start < total; start += 1) {
+    const alpha = pixels[start * 4 + 3];
+    if (alpha > 0) visible += 1;
+    if (alpha > 16 && alpha < 240) partial += 1;
+    if (label[start] !== -1 || alpha < 32) continue;
+    const id = sizes.length;
+    let size = 0;
+    label[start] = id;
+    stack.push(start);
+    while (stack.length) {
+      const index = stack.pop();
+      size += 1;
+      const x = index % width;
+      const y = (index - x) / width;
+      for (let dy = -1; dy <= 1; dy += 1) {
+        for (let dx = -1; dx <= 1; dx += 1) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+          const next = ny * width + nx;
+          if (label[next] !== -1 || pixels[next * 4 + 3] < 32) continue;
+          label[next] = id;
+          stack.push(next);
+        }
+      }
+    }
+    sizes.push(size);
+  }
+  if (!sizes.length) {
+    add("empty", "fix", "Nothing visible in the slice");
+    return { status: "fix", issues };
+  }
+  if (scale < minScale && screenShortSide < smallSide) {
+    add("low-resolution", "fix", `Only ${Math.round(scale * 10) / 10}x resolution; a small element this size looks rough in Unity (needs ${minScale}x or more)`);
+  }
+  if (blurry) add("blurry", "fix", "Soft or blurry edges");
+  const largest = Math.max(...sizes);
+  const specks = sizes.filter((size) => size < Math.max(6, largest * 0.004)).length;
+  if (specks > 0) add("specks", "fix", `${specks} stray speck${specks > 1 ? "s" : ""} around the asset`);
+  if (visible > 0 && partial / visible > 0.3) add("haze", "check", "Many semi-transparent pixels: edges look dirty or hazy");
+
+  // Halo: outer edge pixels much lighter than the pixel two steps inside (a rim of the old light background).
+  let edgePixels = 0;
+  let lightEdges = 0;
+  let backgroundEdges = 0;
+  const looksLikeOutside = (index) => outsideColors.some(([r, g, b]) => colorDistance(pixels[index * 4], pixels[index * 4 + 1], pixels[index * 4 + 2], r, g, b) < 36);
+  const luma = (index) => 0.299 * pixels[index * 4] + 0.587 * pixels[index * 4 + 1] + 0.114 * pixels[index * 4 + 2];
+  const opaque = (x, y) => x >= 0 && y >= 0 && x < width && y < height && pixels[(y * width + x) * 4 + 3] >= 128;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (!opaque(x, y)) continue;
+      const directions = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => !opaque(x + dx, y + dy));
+      if (!directions.length) continue;
+      edgePixels += 1;
+      if (outsideColors.length && looksLikeOutside(y * width + x)) backgroundEdges += 1;
+      const [dx, dy] = directions[0];
+      const ix = x - dx * 2;
+      const iy = y - dy * 2;
+      if (opaque(ix, iy) && luma(y * width + x) - luma(iy * width + ix) > 70) lightEdges += 1;
+    }
+  }
+  if (!recreated && edgePixels >= 20 && backgroundEdges / edgePixels > 0.2) add("leftover-background", "fix", "Edges still carry the background color from around the slice");
+  if (edgePixels >= 20 && lightEdges / edgePixels > 0.25) add("halo", "check", "Light halo around the edges (may be leftover background, or a real light outline)");
+
+  // Cut off: long runs of opaque pixels on the slice border.
+  const sides = [
+    [width, (i) => [i, 0]], [width, (i) => [i, height - 1]], [height, (i) => [0, i]], [height, (i) => [width - 1, i]]
+  ].filter(([length, at]) => {
+    let run = 0;
+    for (let i = 0; i < length; i += 1) if (opaque(...at(i))) run += 1;
+    return run / length > 0.35;
+  }).length;
+  if (!recreated && sides >= 2) add("edge-cut", "check", "Touches the slice border on several sides; it may be cut off");
+
+  const status = issues.some((issue) => issue.severity === "fix") ? "fix" : issues.length ? "check" : "ready";
+  return { status, issues };
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
+    assessSliceHandoff,
     averageBackgroundColors,
     averageColors,
     colorDistance,
     getPixelColor,
+    measureSharpness,
     mixColors,
     pickEdgeBackgroundColor,
     removeEdgeBackgroundPixels,

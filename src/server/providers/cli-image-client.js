@@ -15,7 +15,8 @@ async function callCodexImageRequest(requestPath, body, {
   createAbortError = (message) => Object.assign(new Error(message), { name: "AbortError" }),
   spawnImpl = spawn,
   codexHome = process.env.CODEX_HOME || path.join(os.homedir(), ".codex"),
-  resizeImage = resizePng
+  resizeImage = resizePng,
+  reasoningEffort = process.env.UILAYERCRAFT_CODEX_REASONING || "low"
 }) {
   const isEdit = /\/images\/edits$/.test(requestPath);
   if (!isEdit && !/\/images\/generations$/.test(requestPath)) {
@@ -55,11 +56,16 @@ async function callCodexImageRequest(requestPath, body, {
       prompt
     ].filter((line, index, all) => line || all[index - 1]).join("\n");
 
-    const answer = await runCli("codex", [
+    // --json prints events, so the run's own thread id says which generated_images folder is ours (several
+    // slices can run at once). Low reasoning effort: the work is one image tool call, not planning.
+    const output = await runCli("codex", [
       "exec",
       "--skip-git-repo-check",
       "--ignore-user-config",
       "--enable", "image_generation",
+      "--json",
+      // UILAYERCRAFT_CODEX_REASONING=default keeps Codex's own setting.
+      ...(/^(minimal|low|medium|high)$/.test(reasoningEffort) ? ["-c", `model_reasoning_effort=${reasoningEffort}`] : []),
       "--color", "never",
       "-s", "workspace-write",
       "-C", workDir,
@@ -67,7 +73,8 @@ async function callCodexImageRequest(requestPath, body, {
       ...files.flatMap((file) => ["-i", file])
     ], instructions, { cwd: workDir, timeoutMs, signal, createAbortError, spawnImpl });
 
-    const produced = await findProducedImage(outputPath, codexHome, startedAt);
+    const { threadId, answer } = readCodexEvents(output);
+    const produced = await findProducedImage(outputPath, codexHome, startedAt, threadId);
     if (!produced) {
       // Codex explains why (for example that its image tool is not available for this account); pass that on.
       const reason = String(answer || "").trim().split(/\r?\n/).filter(Boolean).at(-1) || "";
@@ -81,8 +88,35 @@ async function callCodexImageRequest(requestPath, body, {
   }
 }
 
-// The requested path first; otherwise the newest image Codex wrote to $CODEX_HOME/generated_images during this run.
-async function findProducedImage(outputPath, codexHome, startedAt) {
+// `codex exec --json` prints one JSON event per line: the thread id comes first, the agent's messages later.
+// Plain text (an older Codex without --json events) is taken as the answer.
+function readCodexEvents(stdout) {
+  let threadId = "";
+  const messages = [];
+  const plain = [];
+  for (const line of String(stdout || "").split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    let event;
+    try {
+      event = JSON.parse(line);
+    } catch {
+      plain.push(line);
+      continue;
+    }
+    threadId ||= event?.thread_id || event?.session_id || event?.msg?.session_id || "";
+    const item = event?.item;
+    if (item && (item.type === "agent_message" || item.item_type === "assistant_message") && item.text) messages.push(item.text);
+    if (event?.type === "error" && event.message) messages.push(event.message);
+  }
+  return { threadId: /^[\w-]+$/.test(threadId) ? threadId : "", answer: messages.at(-1) || plain.join("\n") };
+}
+
+// Images already handed to a request, so two runs at the same time never take the same file.
+const claimedImages = new Set();
+
+// The requested path first; then the newest image in this run's own $CODEX_HOME/generated_images/<thread id>;
+// without a thread id, the newest unclaimed image written during this run.
+async function findProducedImage(outputPath, codexHome, startedAt, threadId = "") {
   const saved = await fs.readFile(outputPath).catch(() => null);
   if (saved) return saved;
   let newest = null;
@@ -90,14 +124,18 @@ async function findProducedImage(outputPath, codexHome, startedAt) {
     for (const entry of await fs.readdir(dir, { withFileTypes: true }).catch(() => [])) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) await walk(full);
-      else if (/\.(png|jpe?g|webp)$/i.test(entry.name)) {
+      else if (/\.(png|jpe?g|webp)$/i.test(entry.name) && !claimedImages.has(full)) {
         const { mtimeMs } = await fs.stat(full);
         if (mtimeMs >= startedAt - 1000 && (!newest || mtimeMs > newest.mtimeMs)) newest = { full, mtimeMs };
       }
     }
   };
-  await walk(path.join(codexHome, "generated_images"));
-  return newest ? fs.readFile(newest.full) : null;
+  const root = path.join(codexHome, "generated_images");
+  if (threadId) await walk(path.join(root, threadId));
+  if (!newest) await walk(root);
+  if (!newest) return null;
+  claimedImages.add(newest.full);
+  return fs.readFile(newest.full);
 }
 
 async function resizePng(bytes, width, height) {
@@ -106,5 +144,7 @@ async function resizePng(bytes, width, height) {
 }
 
 module.exports = {
-  callCodexImageRequest
+  callCodexImageRequest,
+  findProducedImage,
+  readCodexEvents
 };

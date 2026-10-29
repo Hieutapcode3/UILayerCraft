@@ -42,6 +42,87 @@ test("detectCliTools counts Gemini as ready only with an API key, not a Google a
   assert.equal(gemini({ env: {}, readText: () => "GEMINI_API_KEY=\n" }).loggedIn, false);
 });
 
+// A fake id_token: only the payload matters, the signature is never checked.
+function fakeJwt(claims) {
+  return ["header", Buffer.from(JSON.stringify(claims)).toString("base64url"), "signature"].join(".");
+}
+
+test("detectCliTools with accounts shows the email each logged-in CLI uses", () => {
+  const calls = [];
+  const answers = fakeSpawnSync({
+    "claude --version": { stdout: "2.1.302 (Claude Code)" },
+    "claude auth status": { stdout: "{\"loggedIn\": true, \"email\": \"claude.user@example.com\", \"subscriptionType\": \"max\"}" },
+    "codex --version": { stdout: "codex-cli 0.163.0" },
+    "codex login status": { stdout: "Logged in using ChatGPT" },
+    "gemini --version": { stdout: "0.64.0" }
+  });
+  const codexAuth = JSON.stringify({
+    OPENAI_API_KEY: null,
+    tokens: { id_token: fakeJwt({ email: "codex.user@example.com", "https://api.openai.com/auth": { chatgpt_plan_type: "plus" } }), access_token: "secret-access-token" }
+  });
+  const tools = detectCliTools({
+    withAccounts: true,
+    spawnSyncImpl: (command, args) => {
+      calls.push(Array.isArray(args) ? [command, ...args].join(" ") : command);
+      return answers(command, args);
+    },
+    env: { GEMINI_API_KEY: "secret-key" },
+    homedir: "/home/test",
+    readText: (file) => (/[\\/]\.codex[\\/]auth\.json$/.test(file) ? codexAuth : "")
+  });
+  assert.deepEqual(tools.map(({ name, account }) => ({ name, account })), [
+    { name: "claude", account: "claude.user@example.com (max)" },
+    { name: "codex", account: "codex.user@example.com (plus)" },
+    { name: "gemini", account: "API key (no email)" }
+  ]);
+  // The login check and the account lookup share one `claude auth status` call.
+  assert.equal(calls.filter((line) => line === "claude auth status").length, 1);
+  // Tokens and keys never reach the result.
+  assert.ok(!JSON.stringify(tools).includes("secret"));
+});
+
+test("detectCliTools account falls back to ~/.claude.json, honours CODEX_HOME and handles API-key or unreadable logins", () => {
+  const spawnSyncImpl = fakeSpawnSync({
+    "claude --version": { stdout: "2.1.302" },
+    "claude auth status": { stdout: "{\"loggedIn\": true}" },
+    "codex --version": { stdout: "codex-cli 0.163.0" },
+    "codex login status": { stdout: "Logged in using an API key" },
+    "gemini --version": { stdout: "0.64.0" }
+  });
+  const read = (files) => (file) => files[file.replace(/\\/g, "/")] || "";
+  const detect = (options) => Object.fromEntries(detectCliTools({ withAccounts: true, spawnSyncImpl, homedir: "/home/test", env: {}, ...options }).map((tool) => [tool.name, tool.account]));
+
+  const saved = detect({
+    readText: read({
+      "/home/test/.claude.json": JSON.stringify({ oauthAccount: { emailAddress: "saved@example.com" } }),
+      "/home/test/.codex/auth.json": JSON.stringify({ OPENAI_API_KEY: "sk-secret" })
+    })
+  });
+  assert.equal(saved.claude, "saved@example.com");
+  assert.equal(saved.codex, "API key (no email)");
+  assert.equal(saved.gemini, "");
+
+  const custom = detect({
+    env: { CLAUDE_CONFIG_DIR: "/cfg/claude", CODEX_HOME: "/cfg/codex" },
+    readText: read({
+      "/cfg/claude/.claude.json": JSON.stringify({ oauthAccount: { emailAddress: "custom@example.com" } }),
+      "/cfg/codex/auth.json": JSON.stringify({ tokens: { id_token: fakeJwt({ email: "codex.custom@example.com" }) } })
+    })
+  });
+  assert.equal(custom.claude, "custom@example.com");
+  assert.equal(custom.codex, "codex.custom@example.com");
+
+  // Broken files do not throw; the account is just empty.
+  const broken = detect({ readText: () => "not json" });
+  assert.equal(broken.claude, "");
+  assert.equal(broken.codex, "");
+});
+
+test("detectCliTools leaves out accounts unless asked, so the API server start stays cheap", () => {
+  const tools = detectCliTools({ spawnSyncImpl: fakeSpawnSync({ "claude --version": { stdout: "2.1.302" }, "claude auth status": { stdout: "{\"loggedIn\": true}" } }), env: {}, homedir: "/home/test", readText: () => "" });
+  assert.ok(tools.every((tool) => !("account" in tool)));
+});
+
 test("planCliTaskRouting gives unrouted tasks to Claude for reading and Codex for images", () => {
   let next = 0;
   const createId = () => `cfg_${++next}`;

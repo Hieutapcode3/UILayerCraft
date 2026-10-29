@@ -42,9 +42,13 @@
       const editablePreviewRetry = document.getElementById("editablePreviewRetry");
       const editablePreviewCancel = document.getElementById("editablePreviewCancel");
       const backgroundDecompositionLoadingDialog = document.getElementById("backgroundDecompositionLoadingDialog");
+      const backgroundDecompositionLoadingTitle = document.getElementById("backgroundDecompositionLoadingTitle");
       const backgroundDecompositionLoadingDescription = document.getElementById("backgroundDecompositionLoadingDescription");
       const backgroundDecompositionElapsed = document.getElementById("backgroundDecompositionElapsed");
       const backgroundDecompositionLoadingCancel = document.getElementById("backgroundDecompositionLoadingCancel");
+      const backgroundDecompositionProgressList = document.getElementById("backgroundDecompositionProgressList");
+      const backgroundDecompositionBackground = document.getElementById("backgroundDecompositionBackground");
+      const backgroundDecompositionStartRedraw = document.getElementById("backgroundDecompositionStartRedraw");
       const backgroundDecompositionDialog = document.getElementById("backgroundDecompositionDialog");
       const backgroundDecompositionClose = document.getElementById("backgroundDecompositionClose");
       const backgroundDecompositionRegenerate = document.getElementById("backgroundDecompositionRegenerate");
@@ -87,6 +91,7 @@
       const cutGrid = document.getElementById("cutGrid");
       const exportSlicesButton = document.getElementById("exportSlices");
       const transparentAllButton = document.getElementById("transparentAll");
+      const redrawAllSlicesButton = document.getElementById("redrawAllSlices");
       const toggleAllSlicesButton = document.getElementById("toggleAllSlices");
       const repairPreviewButton = document.getElementById("repairPreview");
       const genFullBackgroundButton = document.getElementById("genFullBackground");
@@ -256,7 +261,8 @@
       let currentMode = "text-to-image";
       let currentStyle = "";
       let currentRatio = "9:16";
-      const currentCount = 1;
+      // Generate UI asks for this many design options at once and lets the user pick one.
+      const currentCount = 3;
       let activeResultIndex = 0;
       let renderedResultImageId = null;
       let referenceImages = [];
@@ -950,6 +956,10 @@
         await makeAllSlicesTransparent();
       });
 
+      redrawAllSlicesButton?.addEventListener("click", () => {
+        redrawAllSlicesForHandoff();
+      });
+
       toggleAllSlicesButton.addEventListener("click", () => {
         const activeImage = getActiveResultImage();
         const assets = activeImage?.sliceManifest?.assets || [];
@@ -1143,13 +1153,20 @@
             progressId
           };
           currentManifest = await createBackendManifest(options);
+          currentManifest.resultChoicePending = currentManifest.resultImages.length > 1;
           clearSliceHistory();
           activeWorkspaceDraftId = null;
           renderResults(currentManifest);
           renderCutModules(currentManifest);
-          setImportActionsDisabled(false);
+          setImportActionsDisabled(currentManifest.resultChoicePending);
           await saveWorkspaceDraftAndRefreshList();
-          if (currentManifest.resultImages.length !== currentCount) {
+          if (currentManifest.resultChoicePending) {
+            const missing = currentCount - currentManifest.resultImages.length;
+            setStatus(
+              `Pick one of the ${currentManifest.resultImages.length} design options.${missing > 0 ? ` ${missing} option${missing > 1 ? "s" : ""} failed to generate.` : ""}`,
+              missing > 0 ? "warning" : "info"
+            );
+          } else if (currentManifest.resultImages.length !== currentCount) {
             setStatus(
               `Requested ${currentCount} images; ${currentManifest.resultImages.length} returned.`,
               currentManifest.resultImages.length < currentCount ? "warning" : "info"
@@ -1327,6 +1344,36 @@
         runBackgroundDecompositionPlanning(false);
       });
       backgroundDecompositionLoadingCancel.addEventListener("click", cancelBackgroundDecompositionPlanning);
+      // Closes the AI Slice popup; the redraws go on and show progress on each slice in the list.
+      backgroundDecompositionBackground?.addEventListener("click", () => {
+        backgroundDecompositionLoadingDialog.classList.remove("open");
+        backgroundDecompositionLoadingDialog.setAttribute("aria-hidden", "true");
+        syncGlobalLoadingState();
+      });
+      backgroundDecompositionStartRedraw?.addEventListener("click", () => {
+        if (sliceRedrawChoice) finishSliceRedrawChoice([...sliceRedrawChoice.selected]);
+      });
+      // Tick boxes in the redraw choice: a box, the whole row, or All / None / Suggested.
+      backgroundDecompositionProgressList?.addEventListener("click", (event) => {
+        const choice = sliceRedrawChoice;
+        if (!choice) return;
+        const pick = event.target.closest("[data-pick]")?.dataset.pick;
+        if (pick) {
+          choice.selected = new Set(pick === "all" ? choice.choosable : pick === "suggested" ? [...choice.suggested] : []);
+          renderSliceProgress();
+          return;
+        }
+        const box = event.target.closest("[data-redraw-pick]");
+        if (box) {
+          toggleSliceRedrawPick(box.dataset.redrawPick, box.checked);
+          return;
+        }
+        const row = event.target.closest(".slice-progress-item.pickable");
+        if (row) toggleSliceRedrawPick(row.dataset.sliceId);
+      });
+      backgroundDecompositionProgressList?.addEventListener("wheel", () => {
+        backgroundDecompositionProgressList.dataset.userScrolled = "1";
+      }, { passive: true });
       backgroundDecompositionClose.addEventListener("click", closeBackgroundDecompositionReview);
       backgroundDecompositionRegenerate.addEventListener("click", () => {
         closeBackgroundDecompositionReview();
@@ -1855,6 +1902,10 @@
         sliceId = null
       } = {}) {
         sidebar.classList.add("has-result");
+        if (manifest.resultChoicePending && manifest.resultImages.length > 1) {
+          renderResultChoice(manifest);
+          return;
+        }
         activeResultIndex = Math.max(0, Math.min(Number(resultIndex) || 0, manifest.resultImages.length - 1));
         activeSliceId = sliceId;
         sliceEdit = null;
@@ -1863,6 +1914,62 @@
         ensureSliceState(manifest);
         renderActiveResult(manifest);
         scheduleWorkspaceDraftSave();
+      }
+
+      // Generate UI options side by side; the picked one becomes the only result image (slicing works on it).
+      function renderResultChoice(manifest) {
+        previewCanvasViewport?.destroy();
+        previewCanvasViewport = null;
+        previewZoomControls.hidden = true;
+        resultCount.textContent = "";
+        resultGrid.innerHTML = `
+          <div class="result-choice">
+            <div class="result-choice-head">
+              <strong>Pick a design</strong>
+              <span>${manifest.resultImages.length} options from the same prompt. The one you pick is kept for AI Slice; the others are dropped.</span>
+            </div>
+            <div class="result-choice-grid">
+              ${manifest.resultImages.map((image, index) => `
+                <figure class="result-choice-option">
+                  <button class="result-choice-preview" type="button" data-zoom-result-option="${index}" title="Click to see it larger">
+                    <img src="${image.dataUrl}" alt="Design option ${index + 1}" />
+                  </button>
+                  <figcaption>
+                    <span>Option ${index + 1}</span>
+                    <button class="result-choice-use" type="button" data-use-result-option="${index}">Use this</button>
+                  </figcaption>
+                </figure>
+              `).join("")}
+            </div>
+          </div>
+        `;
+        resultGrid.querySelectorAll("[data-use-result-option]").forEach((button) => {
+          button.addEventListener("click", () => chooseResultOption(Number(button.dataset.useResultOption)));
+        });
+        // Clicking a preview shows that option alone at full height; clicking again goes back to all options.
+        resultGrid.querySelectorAll("[data-zoom-result-option]").forEach((button) => {
+          button.addEventListener("click", () => {
+            const option = button.closest(".result-choice-option");
+            const zoomed = !option.classList.contains("zoomed");
+            resultGrid.querySelectorAll(".result-choice-option").forEach((other) => other.classList.toggle("zoomed", other === option && zoomed));
+            resultGrid.querySelector(".result-choice-grid")?.classList.toggle("has-zoomed", zoomed);
+          });
+        });
+      }
+
+      function chooseResultOption(index) {
+        const manifest = currentManifest;
+        const chosen = manifest?.resultImages?.[index];
+        if (!chosen) return;
+        manifest.resultImages = [chosen];
+        manifest.previewImage = { dataUrl: chosen.dataUrl };
+        delete manifest.resultChoicePending;
+        clearSliceHistory();
+        renderResults(manifest, { resultIndex: 0 });
+        renderCutModules(manifest);
+        setImportActionsDisabled(false);
+        scheduleWorkspaceDraftSave();
+        setStatus(`Using option ${index + 1}. Run AI Slice when you are ready.`, "success");
       }
 
       function renderLoadingResult(message) {
@@ -2037,6 +2144,16 @@
           : ` · R${values.join("/")}`;
       }
 
+      // "Unity: ready / review / fix" under the slice size; the tooltip lists what the hand-off check found.
+      function renderHandoffCheck(asset) {
+        const check = asset.handoffCheck;
+        if (!check) return "";
+        const labels = { ready: "Unity: ready", check: "Unity: review", fix: "Unity: needs fixing" };
+        const colors = { ready: "#1f9d55", check: "#b7791f", fix: "#d64545" };
+        const details = check.issues.length ? check.issues.map((issue) => `• ${issue.message}`).join("\n") : "Sharp, clean edges, enough resolution.";
+        return `<span class="cut-size cut-handoff" style="color:${colors[check.status]};" title="${escapeHtml(details)}">${labels[check.status]}${check.issues.length ? ` (${check.issues.length})` : ""}</span>`;
+      }
+
       function renderCutModules(manifest, animateReorder = false) {
         if (!manifest?.resultImages?.length) {
           renderEmptyCutModules();
@@ -2051,6 +2168,7 @@
         const assets = activeImage.sliceManifest.assets;
         exportSlicesButton.disabled = assets.length === 0;
         transparentAllButton.disabled = assets.length === 0 || assets.every((asset) => asset.transparent);
+        if (redrawAllSlicesButton) redrawAllSlicesButton.disabled = assets.length === 0 || Boolean(backgroundDecompositionRequest);
         toggleAllSlicesButton.disabled = assets.length === 0;
         repairPreviewButton.disabled = assets.length === 0;
         genFullBackgroundButton.disabled = !getCachedBackgroundDecomposition(activeImage.backgroundDecompositionCache, activeImage)
@@ -2069,11 +2187,13 @@
             <div class="cut-meta">
               <span class="cut-name">${assets.length - index}. ${escapeHtml(asset.name)}</span>
               <span class="cut-size">${asset.placement.width}px × ${asset.placement.height}px${formatSliceRadiiLabel(asset)}${asset.transparent ? " · Transparent PNG" : ""}${asset.auditFailed ? " · Audit failed · needs manual adjustment" : ""}${asset.aiTransparent ? " · AI transparent" : ""}${getAiInpaintTypeLabel(asset) ? ` · ${getAiInpaintTypeLabel(asset)}` : ""}${asset.svgData ? " · SVG" : ""}${asset.aiRedrawn ? " · AI redraw" : ""}</span>
+              ${renderHandoffCheck(asset)}
             </div>
             <details class="cut-action-menu">
               <summary class="cut-action-trigger">Transparent</summary>
               <div class="cut-action-list">
                 <button class="cut-transparent${asset.transparent && !asset.aiTransparent ? " done" : ""}" type="button" data-transparent-slice="${asset.id}"${asset.aiProcessing ? " disabled" : ""}>${asset.transparent && !asset.aiTransparent ? `Made transparent ${renderRestoreIcon()}` : "Transparent"}</button>
+                <button class="cut-ai-upscale${asset.aiUpscaled ? " done" : ""}" type="button" data-ai-upscale-slice="${asset.id}"${asset.aiProcessing || asset.svgData ? " disabled" : ""}>${asset.aiUpscaled ? "AI redrawn at 4x" : "AI redraw 4x (sharp, clean edges)"}</button>
                 <button class="cut-ai-transparent${asset.aiTransparent ? " done" : ""}" type="button" data-ai-transparent-slice="${asset.id}"${asset.aiProcessing ? " disabled" : ""}>${asset.aiTransparent ? `AI made transparent ${renderRestoreIcon()}` : "AI transparent"}</button>
               </div>
             </details>
@@ -2223,6 +2343,13 @@
             } else {
               await makeSliceTransparent(button.dataset.transparentSlice);
             }
+          });
+        });
+        cutGrid.querySelectorAll("[data-ai-upscale-slice]").forEach((button) => {
+          button.addEventListener("click", async (event) => {
+            event.stopPropagation();
+            button.closest("details")?.removeAttribute("open");
+            await makeSliceAiUpscale(button.dataset.aiUpscaleSlice);
           });
         });
         cutGrid.querySelectorAll("[data-ai-transparent-slice]").forEach((button) => {
@@ -2827,6 +2954,7 @@
         closeSliceSettingsDrawer();
         exportSlicesButton.disabled = true;
         transparentAllButton.disabled = true;
+        if (redrawAllSlicesButton) redrawAllSlicesButton.disabled = true;
         cutGrid.innerHTML = "";
       }
 
@@ -3567,9 +3695,17 @@
       function updateBackgroundDecompositionElapsed() {
         const seconds = Math.max(0, Math.floor((Date.now() - backgroundDecompositionStartedAt) / 1000));
         backgroundDecompositionElapsed.textContent = `Elapsed ${seconds}s`;
+        // The slice being redrawn shows its own seconds (only its label changes; thumbnails are not re-rendered).
+        backgroundDecompositionProgressList?.querySelectorAll(".slice-progress-item.busy").forEach((row) => {
+          const item = sliceProgress.get(row.dataset.sliceId);
+          const label = item && busyProgressLabel(item.state, getActiveSliceAsset(row.dataset.sliceId));
+          const state = row.querySelector(".slice-progress-state");
+          if (label && state) state.textContent = label;
+        });
       }
 
       function setBackgroundDecompositionPlanningRunning(running) {
+        if (running) resetSliceProgress();
         backgroundDecompositionLoadingDialog.classList.toggle("open", running);
         backgroundDecompositionLoadingDialog.setAttribute("aria-hidden", String(!running));
         backgroundDecompositionLoadingCancel.disabled = false;
@@ -3590,6 +3726,13 @@
 
       function cancelBackgroundDecompositionPlanning() {
         if (!backgroundDecompositionRequest) return;
+        if (backgroundDecompositionRequest.mode === "auto-redraw") {
+          // Slices are already added; only the redraws stop.
+          stopAutoSlicePasses();
+          backgroundDecompositionLoadingCancel.disabled = true;
+          backgroundDecompositionLoadingCancel.textContent = "Cancelling...";
+          return;
+        }
         backgroundDecompositionLoadingCancel.disabled = true;
         backgroundDecompositionLoadingCancel.textContent = "Cancelling...";
         fetchBackend(
@@ -3600,6 +3743,10 @@
       }
 
       async function runBackgroundDecompositionPlanning(forceRecognition = false) {
+        if (currentManifest?.resultChoicePending) {
+          setStatus("Pick one of the generated design options first.", "warning");
+          return;
+        }
         const activeImage = getActiveResultImage();
         if (
           !currentManifest
@@ -3674,6 +3821,13 @@
             progressId,
             controller.signal
           );
+          // The popup stays open with the element list while the slices are checked and redrawn, unless the user
+          // chose "Run in background".
+          if (pendingAutoSlicePass && addedCount > 0) {
+            backgroundDecompositionLoadingDescription.textContent = "Checking every slice and redrawing the ones that are not clean enough…";
+            backgroundDecompositionRequest.mode = "auto-redraw";
+            await pendingAutoSlicePass;
+          }
           backgroundDecompositionReview.imageId = activeImage.id;
           persistBackgroundDecompositionReview();
           if (backgrounds.length === 0) {
@@ -4682,6 +4836,7 @@
           }, index, batchId, signal);
           preparedAssets.push(prepared);
           activeImage.sliceManifest.assets.push(prepared);
+          setSliceProgress(prepared.id, "detected");
           activeSliceId = prepared.id;
           const card = resultGrid.querySelector(".result-card.slice-mode");
           const layer = card?.querySelector(".slice-layer");
@@ -4692,6 +4847,7 @@
         preparedAssets.forEach((asset) => placeSliceBelowContained(activeImage.sliceManifest.assets, asset));
         const backgroundOnly = await isolateDetectedSliceLayers(activeImage, preparedAssets);
         for (const asset of backgroundOnly) {
+          sliceProgress.delete(asset.id);
           activeImage.sliceManifest.assets.splice(activeImage.sliceManifest.assets.indexOf(asset), 1);
           preparedAssets.splice(preparedAssets.indexOf(asset), 1);
         }
@@ -4699,7 +4855,7 @@
         refreshSliceVisibility();
         renderCutModules(currentManifest);
         scheduleWorkspaceDraftSave();
-        fixRebuiltSlicesWithAi(preparedAssets.filter((asset) => asset.rebuiltRegion));
+        runAutoSliceAiPasses(preparedAssets);
         return preparedAssets.length;
       }
 
@@ -4954,16 +5110,17 @@
         }
       }
 
-      async function makeSliceAiTransparent(id) {
+      // background: true skips the full-screen modal (automatic runs); the slice itself shows progress and Cancel.
+      async function makeSliceAiTransparent(id, { background = false, prompt = "", label = "Requesting AI to generate a transparent PNG" } = {}) {
         const asset = getActiveSliceAsset(id);
         if (!asset || asset.aiProcessing) {
           return;
         }
-        setBusy(true, `Requesting AI to generate a transparent PNG: ${asset.name}`, true);
-        setSliceAiProcessing(asset, "Requesting AI to generate a transparent PNG · 0s", true);
+        if (!background) setBusy(true, `${label}: ${asset.name}`, true);
+        setSliceAiProcessing(asset, `${label} · 0s`, true);
         const progressId = createAiProgressId("transparent");
         const controller = beginSliceAiRequest(asset, progressId);
-        const stopProgress = startAiProgressPolling(progressId, (progress) => updateSliceAiProgress(asset, progress, "Requesting AI to generate a transparent PNG"));
+        const stopProgress = startAiProgressPolling(progressId, (progress) => updateSliceAiProgress(asset, progress, label));
         try {
           const restoreState = createSliceTransparencyRestoreState(asset);
           const sourceDataUrl = restoreState.dataUrl;
@@ -4976,7 +5133,7 @@
               name: asset.name,
               width: asset.placement.width,
               height: asset.placement.height,
-              prompt: buildAiTransparentPrompt(asset),
+              prompt: prompt || buildAiTransparentPrompt(asset),
               progressId,
               quality: "high"
             })
@@ -5001,7 +5158,8 @@
           refreshSliceVisibility();
           renderCutModules(currentManifest);
           scheduleWorkspaceDraftSave();
-          setStatus(`Generated AI transparent PNG: ${asset.name}. The original slice is kept.`, "success");
+          if (!background) setStatus(`Generated AI transparent PNG: ${asset.name}. The original slice is kept.`, "success");
+          return true;
         } catch (error) {
           if (error?.name !== "AbortError") {
             setStatus(`AI transparent PNG failed: ${error.message || String(error)}`, "error");
@@ -5011,8 +5169,9 @@
           finishSliceAiRequest(asset, controller);
           if (aiCompletePreview?.sliceId === id) aiCompletePreview = null;
           setSliceAiProcessing(asset, "", false);
-          releaseBusyIfIdle();
+          if (!background) releaseBusyIfIdle();
         }
+        return false;
       }
 
       async function makeSliceAiComplete(id, regions) {
@@ -5608,21 +5767,520 @@
         return true;
       }
 
+      // Runs after AI Slice while the AI Slice popup lists every element: the hand-off check picks the slices to
+      // recreate at 4x (smallest first, rebuilt ones first), the rest of the rebuilt slices get the hidden-part fix,
+      // then the check is shown on every slice. A slice that is recreated skips the hidden-part fix (the redraw
+      // restores covered parts itself), so no extra Codex call and no second slice.
+      let autoSliceAiRun = 0;
+      // High enough for a whole screen; the popup shows progress and Cancel / Run in background.
+      const AUTO_UPSCALE_LIMIT = 40;
+      const AUTO_UPSCALE_SCALE = 4;
+      // Five at once; lowered automatically when the account reports a rate limit.
+      const AUTO_UPSCALE_CONCURRENCY = 5;
+      const SMALL_SLICE_SIDE = 160;
+      let upscaleSkippedCount = 0;
+      let pendingAutoSlicePass = null;
+      function runAutoSliceAiPasses(assets, { fixHiddenParts = true } = {}) {
+        const run = ++autoSliceAiRun;
+        pendingAutoSlicePass = (async () => {
+          try {
+            const candidates = await planSliceUpscales(assets, run);
+            const choosing = backgroundDecompositionLoadingDialog.classList.contains("open");
+            const picked = run === autoSliceAiRun ? await chooseSliceUpscales(assets, candidates, run) : null;
+            if (picked === null || run !== autoSliceAiRun) {
+              await checkSlicesForHandoff(assets, { announce: true });
+              return;
+            }
+            const queue = buildUpscaleQueue(picked);
+            const queued = new Set(queue.map((item) => item.id));
+            // After the user picked, only what they ticked uses AI; unattended runs also fix hidden parts.
+            if (fixHiddenParts && !choosing && run === autoSliceAiRun) await fixRebuiltSlicesWithAi(assets.filter((asset) => asset.rebuiltRegion && !queued.has(asset.id)), run);
+            if (run === autoSliceAiRun) await runSliceUpscales(queue, run);
+            if (run === autoSliceAiRun) await checkSlicesForHandoff(assets, { announce: true });
+          } catch (error) {
+            console.warn("Automatic slice AI pass failed", error);
+          }
+        })();
+        return pendingAutoSlicePass;
+      }
+
+      // "AI Redraw All": the same check and 4x redraw as after AI Slice, on every slice of the current image, with the
+      // progress list in the AI Slice popup. Slices already redrawn are kept.
+      async function redrawAllSlicesForHandoff() {
+        const activeImage = getActiveResultImage();
+        const assets = [...(activeImage?.sliceManifest?.assets || [])];
+        if (!assets.length || backgroundDecompositionRequest || uiBusy) return;
+        if (!hasConfiguredTaskAccess("generation")) {
+          setStatus("Set up an image generation model (for example Codex CLI) in Settings first.", "warning");
+          return;
+        }
+        backgroundDecompositionRequest = { controller: new AbortController(), progressId: "", mode: "auto-redraw" };
+        setBackgroundDecompositionPlanningRunning(true);
+        backgroundDecompositionLoadingTitle.textContent = "AI Redraw in Progress";
+        backgroundDecompositionLoadingDescription.textContent = "Checking every slice and redrawing the ones that are not clean enough…";
+        assets.filter((asset) => !asset.svgData).forEach((asset) => setSliceProgress(asset.id, "detected"));
+        try {
+          await runAutoSliceAiPasses(assets.filter((asset) => !asset.svgData), { fixHiddenParts: false });
+        } finally {
+          backgroundDecompositionRequest = null;
+          setBackgroundDecompositionPlanningRunning(false);
+          backgroundDecompositionLoadingTitle.textContent = typeof t === "function" ? t("loading_ai_decomp", "AI Slicing in Progress") : "AI Slicing in Progress";
+          renderCutModules(currentManifest);
+        }
+      }
+
+      // Stops the automatic passes (AI Slice popup Cancel): the slice being redrawn is cancelled, the rest skipped.
+      function stopAutoSlicePasses() {
+        if (sliceRedrawChoice) {
+          // "Skip redraw" while choosing: the slices stay as they are.
+          finishSliceRedrawChoice(null);
+          return;
+        }
+        autoSliceAiRun += 1;
+        for (const id of sliceAiControllers.keys()) cancelSliceAiRequest(id);
+      }
+
+      // ---- Per-element progress list in the AI Slice popup ----
+      const sliceProgress = new Map();
+      const SLICE_PROGRESS_LABELS = {
+        detected: "Detected",
+        checking: "Checking quality…",
+        queued: "Waiting for AI redraw 4x",
+        fixing: "Restoring hidden parts…",
+        working: "AI redraw 4x…",
+        redrawn: "Redrawn 4x",
+        fixed: "Hidden parts restored",
+        skipped: "Over the limit: use \"AI redraw 4x\" later",
+        failed: "AI redraw failed",
+        cancelled: "Cancelled",
+        ready: "Unity: ready",
+        review: "Unity: review",
+        fix: "Unity: needs fixing"
+      };
+      function resetSliceProgress() {
+        sliceProgress.clear();
+        renderSliceProgress();
+      }
+      function setSliceProgress(id, state, note = "") {
+        const previous = sliceProgress.get(id) || {};
+        sliceProgress.set(id, { ...previous, state, note, redrawn: previous.redrawn || state === "redrawn" });
+        renderSliceProgress();
+      }
+      // "AI redraw 4x · 42s": the step name plus the seconds from the slice's own progress label.
+      function busyProgressLabel(state, asset) {
+        const seconds = String(asset?.aiProcessingLabel || "").match(/(\d+s)$/)?.[1];
+        return seconds && ["working", "fixing"].includes(state) ? `${SLICE_PROGRESS_LABELS[state].replace("…", "")} · ${seconds}` : "";
+      }
+
+      function renderSliceRedrawChoice(list, entries) {
+        const choice = sliceRedrawChoice;
+        const choosable = new Set(choice.choosable);
+        backgroundDecompositionBackground.hidden = true;
+        backgroundDecompositionStartRedraw.hidden = false;
+        backgroundDecompositionStartRedraw.disabled = choice.selected.size === 0;
+        backgroundDecompositionStartRedraw.textContent = `AI redraw selected (${choice.selected.size})`;
+        list.innerHTML = `
+          <li class="slice-progress-summary slice-progress-choice">
+            <span>${choice.selected.size} of ${choice.choosable.length} selected</span>
+            <span class="slice-progress-choice-actions">
+              <button class="slice-progress-toggle-all" type="button" data-pick="suggested">Suggested</button>
+              <button class="slice-progress-toggle-all" type="button" data-pick="all">All</button>
+              <button class="slice-progress-toggle-all" type="button" data-pick="none">None</button>
+            </span>
+          </li>
+          ${entries.filter(([id]) => choosable.has(id)).map(([id, item]) => {
+            const asset = getActiveSliceAsset(id);
+            const checked = choice.selected.has(id);
+            const label = (item.state !== "redrawn" && (item.redrawn || asset?.aiUpscaled) ? "Redrawn 4x · " : "") + (SLICE_PROGRESS_LABELS[item.state] || item.state);
+            const issues = (asset?.handoffCheck?.issues || []).map((issue) => issue.message).join("\n");
+            return `<li class="slice-progress-item pickable state-${item.state}${checked ? " picked" : ""}" data-slice-id="${escapeHtml(id)}" title="${escapeHtml(issues)}">
+              <span class="slice-progress-icon"><input type="checkbox" data-redraw-pick="${escapeHtml(id)}"${checked ? " checked" : ""} aria-label="Redraw ${escapeHtml(asset?.name || id)}" /></span>
+              ${asset?.dataUrl ? `<img class="slice-progress-thumb" src="${asset.dataUrl}" alt="" />` : `<span class="slice-progress-thumb"></span>`}
+              <span class="slice-progress-name">${escapeHtml(asset?.name || item.name || id)}</span>
+              <span class="slice-progress-state">${escapeHtml(label)}</span>
+            </li>`;
+          }).join("")}`;
+      }
+
+      function toggleSliceRedrawPick(id, checked) {
+        const choice = sliceRedrawChoice;
+        if (!choice || !choice.choosable.includes(id)) return;
+        if (checked ?? !choice.selected.has(id)) choice.selected.add(id);
+        else choice.selected.delete(id);
+        renderSliceProgress();
+      }
+
+      function renderSliceProgress() {
+        const list = backgroundDecompositionProgressList;
+        if (!list) return;
+        const card = list.closest(".editable-preview-loading-card");
+        card?.classList.toggle("with-slice-progress", sliceProgress.size > 0);
+        list.hidden = sliceProgress.size === 0;
+        if (!sliceProgress.size) {
+          list.innerHTML = "";
+          backgroundDecompositionBackground.hidden = true;
+          return;
+        }
+        const entries = [...sliceProgress.entries()];
+        if (sliceRedrawChoice) {
+          renderSliceRedrawChoice(list, entries);
+          return;
+        }
+        const finished = entries.filter(([, item]) => ["redrawn", "fixed", "ready", "review", "fix", "failed", "skipped", "cancelled"].includes(item.state)).length;
+        const working = entries.filter(([, item]) => ["working", "fixing", "checking"].includes(item.state)).length;
+        backgroundDecompositionBackground.hidden = !working;
+        list.innerHTML = `
+          <li class="slice-progress-summary">${finished} / ${entries.length} done · AI redraw runs up to ${AUTO_UPSCALE_CONCURRENCY} at a time${working > 1 ? ` (${working} running now)` : ""}</li>
+          ${entries.map(([id, item]) => {
+            const asset = getActiveSliceAsset(id);
+            const busy = ["working", "fixing", "checking"].includes(item.state);
+            const icon = busy ? `<span class="slice-progress-spinner" aria-hidden="true"></span>`
+              : ["redrawn", "fixed", "ready"].includes(item.state) ? "✓"
+                : item.state === "review" ? "!"
+                  : ["fix", "failed"].includes(item.state) ? "✕"
+                    : "•";
+            const label = busyProgressLabel(item.state, asset) || SLICE_PROGRESS_LABELS[item.state] || item.state;
+            const prefix = item.redrawn && ["ready", "review", "fix"].includes(item.state) ? "Redrawn 4x · " : "";
+            return `<li class="slice-progress-item state-${item.state}${busy ? " busy" : ""}" data-slice-id="${escapeHtml(id)}">
+              <span class="slice-progress-icon">${icon}</span>
+              ${asset?.dataUrl ? `<img class="slice-progress-thumb" src="${asset.dataUrl}" alt="" />` : `<span class="slice-progress-thumb"></span>`}
+              <span class="slice-progress-name" title="${escapeHtml(item.note || "")}">${escapeHtml(asset?.name || item.name || id)}</span>
+              <span class="slice-progress-state">${escapeHtml(prefix + label)}</span>
+            </li>`;
+          }).join("")}`;
+        const current = list.querySelector(".slice-progress-item.busy");
+        if (current && !list.dataset.userScrolled) current.scrollIntoView({ block: "nearest" });
+      }
+
+      async function readImagePixels(dataUrl, maxSide = Infinity) {
+        const image = await loadImageElement(dataUrl);
+        const naturalWidth = image.naturalWidth || image.width;
+        const naturalHeight = image.naturalHeight || image.height;
+        const scale = Math.min(1, maxSide / Math.max(naturalWidth, naturalHeight));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(naturalHeight * scale));
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        return { pixels: context.getImageData(0, 0, canvas.width, canvas.height).data, width: canvas.width, height: canvas.height, naturalWidth, naturalHeight };
+      }
+
+      // Colors on the outer ring of the opaque crop: the background around the slice in the original image.
+      async function readOutsideColors(dataUrl) {
+        if (!dataUrl) return [];
+        const { pixels, width, height } = await readImagePixels(dataUrl, 256);
+        const colors = [];
+        const take = (x, y) => {
+          const index = (y * width + x) * 4;
+          if (pixels[index + 3] >= 200) colors.push([pixels[index], pixels[index + 1], pixels[index + 2]]);
+        };
+        const step = Math.max(1, Math.round((width + height) / 64));
+        for (let x = 0; x < width; x += step) { take(x, 0); take(x, height - 1); }
+        for (let y = 0; y < height; y += step) { take(0, y); take(width - 1, y); }
+        return colors;
+      }
+
+      // The artist's hand-off check (see assessSliceHandoff), stored on the slice and shown in the slice list.
+      async function checkSliceForHandoff(asset) {
+        if (!asset?.dataUrl || asset.svgData) {
+          if (asset) asset.handoffCheck = null;
+          return null;
+        }
+        const image = await readImagePixels(asset.dataUrl, 1024);
+        const small = await readImagePixels(asset.dataUrl, 160);
+        const blurry = measureSharpness(small.pixels, small.width, small.height).blurry;
+        const result = assessSliceHandoff(image.pixels, image.width, image.height, {
+          scale: image.naturalWidth / Math.max(1, asset.placement.width),
+          screenShortSide: Math.min(asset.placement.width, asset.placement.height),
+          smallSide: SMALL_SLICE_SIDE,
+          blurry,
+          recreated: Boolean(asset.aiUpscaled),
+          outsideColors: asset.aiUpscaled ? [] : await readOutsideColors(asset.originalDataUrl)
+        });
+        asset.handoffCheck = result;
+        return result;
+      }
+
+      async function checkSlicesForHandoff(assets, { announce = false } = {}) {
+        const counts = { ready: 0, check: 0, fix: 0 };
+        for (const asset of assets) {
+          const current = getActiveSliceAsset(asset.id);
+          if (!current) continue;
+          try {
+            const result = await checkSliceForHandoff(current);
+            if (!result) continue;
+            counts[result.status] += 1;
+            const state = sliceProgress.get(current.id)?.state;
+            if (sliceProgress.has(current.id) && !["failed", "cancelled", "skipped"].includes(state)) {
+              setSliceProgress(current.id, result.status === "check" ? "review" : result.status, result.issues.map((issue) => issue.message).join("\n"));
+            }
+          } catch (error) {
+            console.warn(`Hand-off check failed for ${asset.name}`, error);
+          }
+        }
+        renderCutModules(currentManifest);
+        scheduleWorkspaceDraftSave();
+        if (announce && counts.ready + counts.check + counts.fix > 0) {
+          setStatus(
+            `Unity hand-off check: ${counts.ready} ready, ${counts.check} to review, ${counts.fix} need fixing.${upscaleSkippedCount ? ` ${upscaleSkippedCount} more were over the limit of ${AUTO_UPSCALE_LIMIT}: use "AI redraw 4x" in their Transparent menu.` : ""} Hover a slice's check for details.`,
+            counts.fix ? "warning" : "success"
+          );
+        }
+        return counts;
+      }
+
+      // Raster slices that fail the hand-off check are recreated by the image model at 4x from the original crop on a
+      // key color (server: asset-upscale.js). Each Codex call costs quota and 30-100 s, so at most AUTO_UPSCALE_LIMIT.
+      async function planSliceUpscales(assets, run) {
+        upscaleSkippedCount = 0;
+        if (!assets.length || !hasConfiguredTaskAccess("generation")) return [];
+        const candidates = [];
+        for (const asset of assets) {
+          if (run !== autoSliceAiRun) return [];
+          const current = getActiveSliceAsset(asset.id);
+          if (!current || current.svgData || current.aiProcessing || !current.dataUrl) continue;
+          if (current.aiUpscaled) {
+            if (sliceProgress.has(current.id)) setSliceProgress(current.id, "redrawn");
+            continue;
+          }
+          if (sliceProgress.has(current.id)) setSliceProgress(current.id, "checking");
+          try {
+            const result = await checkSliceForHandoff(current);
+            // "Needs fixing" is always redrawn; "review" only for small elements (a big background that merely
+            // touches its box is left alone).
+            const small = Math.min(current.placement.width, current.placement.height) < SMALL_SLICE_SIDE;
+            if (result && (result.status === "fix" || (result.status === "check" && small))) {
+              candidates.push({ id: current.id, area: current.placement.width * current.placement.height });
+            } else if (sliceProgress.has(current.id)) {
+              setSliceProgress(current.id, result?.status === "check" ? "review" : "ready");
+            }
+          } catch (error) {
+            console.warn(`Hand-off check failed for ${asset.name}`, error);
+            if (sliceProgress.has(current.id)) setSliceProgress(current.id, "detected");
+          }
+        }
+        candidates.forEach((item) => {
+          if (!sliceProgress.has(item.id)) return;
+          const status = getActiveSliceAsset(item.id)?.handoffCheck?.status;
+          setSliceProgress(item.id, status === "check" ? "review" : "fix");
+        });
+        return candidates;
+      }
+
+      // Smallest first (small icons and text look worst at 1x), at most AUTO_UPSCALE_LIMIT; the rest are marked skipped.
+      function buildUpscaleQueue(ids) {
+        const items = ids.map((id) => getActiveSliceAsset(id)).filter(Boolean)
+          .map((asset) => ({ id: asset.id, area: asset.placement.width * asset.placement.height }))
+          .sort((a, b) => a.area - b.area);
+        const queue = items.slice(0, AUTO_UPSCALE_LIMIT);
+        upscaleSkippedCount = items.length - queue.length;
+        queue.forEach((item) => sliceProgress.has(item.id) && setSliceProgress(item.id, "queued"));
+        items.slice(AUTO_UPSCALE_LIMIT).forEach((item) => sliceProgress.has(item.id) && setSliceProgress(item.id, "skipped"));
+        return queue;
+      }
+
+      // Pauses with a tick box on every slice in the AI Slice popup: the ones that failed the check are ticked; the
+      // user changes the ticks and starts the redraw. Without the popup on screen (Run in background), the
+      // suggestion is used as is. Resolves to the ticked ids, or null when the user skips the redraw.
+      let sliceRedrawChoice = null;
+      function chooseSliceUpscales(assets, candidates, run) {
+        const suggested = candidates.map((item) => item.id);
+        if (run !== autoSliceAiRun || !backgroundDecompositionLoadingDialog.classList.contains("open")) return Promise.resolve(suggested);
+        const choosable = assets.map((asset) => getActiveSliceAsset(asset.id))
+          .filter((asset) => asset && !asset.svgData && asset.dataUrl && sliceProgress.has(asset.id))
+          .map((asset) => asset.id);
+        if (!choosable.length) return Promise.resolve(suggested);
+        return new Promise((resolve) => {
+          sliceRedrawChoice = { selected: new Set(suggested), suggested: new Set(suggested), choosable, resolve };
+          backgroundDecompositionLoadingDialog.dataset.state = "choose";
+          backgroundDecompositionLoadingDescription.textContent = "Tick the slices to redraw with AI at 4x. The ones that are not ready for Unity are ticked for you.";
+          backgroundDecompositionLoadingCancel.textContent = "Skip redraw";
+          backgroundDecompositionLoadingCancel.disabled = false;
+          renderSliceProgress();
+        });
+      }
+
+      function finishSliceRedrawChoice(ids) {
+        const choice = sliceRedrawChoice;
+        if (!choice) return;
+        sliceRedrawChoice = null;
+        delete backgroundDecompositionLoadingDialog.dataset.state;
+        backgroundDecompositionStartRedraw.hidden = true;
+        backgroundDecompositionLoadingCancel.textContent = "Cancel";
+        backgroundDecompositionLoadingDescription.textContent = ids?.length
+          ? `Redrawing ${ids.length} slice${ids.length > 1 ? "s" : ""} with AI at ${AUTO_UPSCALE_SCALE}x…`
+          : "No slices to redraw.";
+        choice.resolve(ids);
+      }
+
+
+      // Up to AUTO_UPSCALE_CONCURRENCY redraws at once (each Codex run mostly waits on the model, so three at a time
+      // take about a third of the time). A failure or Cancel stops new ones from starting; running ones finish.
+      async function runSliceUpscales(queue, run) {
+        const pending = [...queue];
+        const attempts = new Map();
+        let limit = Math.min(AUTO_UPSCALE_CONCURRENCY, pending.length);
+        let active = 0;
+        let done = 0;
+        let stopped = false;
+        const report = () => setStatus(`AI is redrawing slices at ${AUTO_UPSCALE_SCALE}x: ${done} / ${queue.length} done, ${active} running`, "info");
+        const worker = async () => {
+          while (!stopped && pending.length) {
+            if (run !== autoSliceAiRun) {
+              stopped = true;
+              break;
+            }
+            // After a rate limit, extra workers stop so fewer run at once.
+            if (active >= limit) return;
+            const item = pending.shift();
+            const asset = getActiveSliceAsset(item.id);
+            if (!asset || asset.aiProcessing) continue;
+            active += 1;
+            setSliceProgress(item.id, "working");
+            report();
+            const ok = await makeSliceAiUpscale(item.id, { background: true });
+            active -= 1;
+            if (ok) {
+              done += 1;
+              setSliceProgress(item.id, "redrawn");
+            } else if (run !== autoSliceAiRun) {
+              setSliceProgress(item.id, "cancelled");
+              stopped = true;
+            } else if (/rate.?limit|429|too many|usage limit|capacity|overloaded|try again/i.test(getActiveSliceAsset(item.id)?.lastAiError || "") && (attempts.get(item.id) || 0) < 2) {
+              // The account is busy: one worker fewer, and this slice goes back in the queue.
+              attempts.set(item.id, (attempts.get(item.id) || 0) + 1);
+              limit = Math.max(1, limit - 1);
+              pending.push(item);
+              setSliceProgress(item.id, "queued");
+              await new Promise((resolve) => setTimeout(resolve, 5000));
+            } else {
+              done += 1;
+              setSliceProgress(item.id, "failed");
+              // A broken CLI should not burn through every slice.
+              stopped = true;
+            }
+            report();
+          }
+        };
+        await Promise.all(Array.from({ length: limit }, worker));
+        pending.forEach((rest) => sliceProgress.has(rest.id) && setSliceProgress(rest.id, "cancelled"));
+      }
+
+      // The AI completion step leaves the raw model output as a second slice of the same element; only one is kept.
+      function dropAiRawSiblings(asset) {
+        const activeImage = getActiveResultImage();
+        const groupId = asset?.aiInpaintResultGroupId;
+        if (!activeImage?.sliceManifest?.assets || !groupId) return;
+        const removed = activeImage.sliceManifest.assets.filter((other) => other !== asset && other.aiInpaintResultGroupId === groupId && !other.aiProcessing);
+        if (!removed.length) return;
+        activeImage.sliceManifest.assets = activeImage.sliceManifest.assets.filter((other) => !removed.includes(other));
+        for (const other of removed) {
+          selectedSliceIds.delete(other.id);
+          sliceCropVersions.delete(other.id);
+          if (activeSliceId === other.id) activeSliceId = asset.id;
+        }
+        delete asset.aiInpaintResultGroupId;
+        delete asset.aiInpaintResultRole;
+      }
+
+      // Slices painted after this one that lie mostly inside it (buttons on a panel, a label on a button), in the
+      // slice's own pixels. The redraw leaves them out instead of drawing slots where they sit.
+      function getSlicesDrawnOver(asset) {
+        const assets = getActiveResultImage()?.sliceManifest?.assets || [];
+        const own = asset.placement;
+        const ownArea = own.width * own.height;
+        return assets.slice(assets.indexOf(asset) + 1).filter((other) => {
+          const box = other.placement;
+          if (!box || other === asset) return false;
+          const overlapWidth = Math.min(own.x + own.width, box.x + box.width) - Math.max(own.x, box.x);
+          const overlapHeight = Math.min(own.y + own.height, box.y + box.height) - Math.max(own.y, box.y);
+          if (overlapWidth <= 0 || overlapHeight <= 0) return false;
+          const area = box.width * box.height;
+          return overlapWidth * overlapHeight >= area * 0.6 && area < ownArea * 0.9;
+        }).map((other) => ({
+          name: other.name,
+          x: other.placement.x - own.x,
+          y: other.placement.y - own.y,
+          width: other.placement.width,
+          height: other.placement.height
+        }));
+      }
+
+      // Redraws one slice at 4x on a key color (server: asset-upscale.js). The result keeps its high resolution:
+      // the slice keeps its place and size, so Figma and exports at 2x/3x stay crisp. The previous image is restorable.
+      async function makeSliceAiUpscale(id, { background = false } = {}) {
+        const asset = getActiveSliceAsset(id);
+        if (!asset || asset.aiProcessing || asset.svgData) return false;
+        const label = `AI redraw at ${AUTO_UPSCALE_SCALE}x`;
+        if (!background) setBusy(true, `${label}: ${asset.name}`, true);
+        setSliceAiProcessing(asset, `${label} · 0s`, true);
+        const progressId = createAiProgressId("upscale");
+        const controller = beginSliceAiRequest(asset, progressId);
+        const stopProgress = startAiProgressPolling(progressId, (progress) => updateSliceAiProgress(asset, progress, label));
+        try {
+          const response = await fetchBackend("/api/assets/ai-redraw", {
+            method: "POST",
+            signal: controller.signal,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              mode: "upscale",
+              // The cut-out from slicing, not an earlier redraw, so a redo does not copy the earlier result's mistakes.
+              layerDataUrl: asset.layerTransparentDataUrl || asset.dataUrl,
+              dataUrl: asset.originalDataUrl || asset.dataUrl,
+              name: asset.name,
+              width: asset.placement.width,
+              height: asset.placement.height,
+              scale: AUTO_UPSCALE_SCALE,
+              covers: getSlicesDrawnOver(asset),
+              progressId,
+              quality: "high"
+            })
+          });
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(result.error || `AI upscale request failed: ${response.status}`);
+          const image = result.images && result.images[0];
+          if (!image?.dataUrl) throw new Error("AI upscale returned no image");
+          recordSliceHistory();
+          applySliceTransparencyResult(asset, { dataUrl: image.dataUrl, ai: true });
+          asset.aiUpscaled = true;
+          asset.lastAiError = "";
+          asset.name = asset.name.replace(/_(?:local_composite|ai_original)$/, "");
+          dropAiRawSiblings(asset);
+          normalizeSliceAssetNames(getActiveResultImage().sliceManifest.assets);
+          await checkSliceForHandoff(asset).catch(() => null);
+          refreshSliceVisibility();
+          renderCutModules(currentManifest);
+          scheduleWorkspaceDraftSave();
+          if (!background) setStatus(`Redrew ${asset.name} at ${AUTO_UPSCALE_SCALE}x. The previous image is kept.`, "success");
+          return true;
+        } catch (error) {
+          asset.lastAiError = error?.message || String(error);
+          if (error?.name !== "AbortError") setStatus(`AI upscale failed for ${asset.name}: ${asset.lastAiError}`, "error");
+        } finally {
+          stopProgress();
+          finishSliceAiRequest(asset, controller);
+          setSliceAiProcessing(asset, "", false);
+          if (!background) releaseBusyIfIdle();
+        }
+        return false;
+      }
+
       // Slices whose hidden parts were guessed locally are redone by the image model when one is set up
       // (for example cli://codex); the local guess stays restorable. Runs in the background after AI Slice.
-      async function fixRebuiltSlicesWithAi(assets) {
+      async function fixRebuiltSlicesWithAi(assets, run = autoSliceAiRun) {
         if (!assets.length || !hasConfiguredTaskAccess("inpaint")) return;
         for (const [index, asset] of assets.entries()) {
+          if (run !== autoSliceAiRun) return;
           if (!getActiveSliceAsset(asset.id)) continue;
           const { name, layerTransparentDataUrl } = asset;
           setStatus(`AI is fixing slice ${index + 1} / ${assets.length}: ${name}`, "info");
+          if (sliceProgress.has(asset.id)) setSliceProgress(asset.id, "fixing");
           await makeSliceAiComplete(asset.id, [asset.rebuiltRegion]);
           const fixed = getActiveSliceAsset(asset.id);
+          if (sliceProgress.has(asset.id)) setSliceProgress(asset.id, fixed?.aiCompleted ? "fixed" : "failed");
           if (!fixed?.aiCompleted) continue;
-          // Keep only the fixed slice for import; the raw model output stays in the list, unselected.
-          for (const other of getActiveResultImage().sliceManifest.assets) {
-            if (other !== fixed && other.aiInpaintResultGroupId === fixed.aiInpaintResultGroupId) other.selected = false;
-          }
+          // Keep only the fixed slice: the raw model output is removed instead of left as a second slice.
+          dropAiRawSiblings(fixed);
           // The model only repaints colors: the layer keeps the shape found when it was separated, and its name.
           applySliceTransparencyResult(fixed, { dataUrl: await applyAlphaFrom(fixed.dataUrl, layerTransparentDataUrl), ai: false });
           fixed.name = name;

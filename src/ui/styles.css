@@ -71,7 +71,7 @@ textarea,
   display: none;
 }
 
-body.loading-interaction-locked button:not(#windowToggle):not(#editablePreviewCancel):not(#backgroundDecompositionLoadingCancel) {
+body.loading-interaction-locked button:not(#windowToggle):not(#editablePreviewCancel):not(#backgroundDecompositionLoadingCancel):not(#backgroundDecompositionBackground):not(#backgroundDecompositionStartRedraw):not(.slice-progress-toggle-all) {
   pointer-events: none;
   opacity: 0.55;
 }
@@ -4854,4 +4854,251 @@ body.collapsed .new-work-trigger {
 .drafts-panel,
 .status {
   box-shadow: 0 0 0 1px var(--line), 0 24px 64px rgba(0, 0, 0, 0.55);
+}
+
+/* AI Slice popup: one row per detected element while it is checked and redrawn. */
+.editable-preview-loading-card.with-slice-progress {
+  width: min(560px, 100%);
+}
+
+.slice-progress-list {
+  box-sizing: border-box;
+  width: 100%;
+  max-height: min(46vh, 420px);
+  margin: 16px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  list-style: none;
+  text-align: left;
+}
+
+.slice-progress-summary {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.slice-progress-item {
+  display: grid;
+  grid-template-columns: 18px 36px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 12px;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.slice-progress-item + .slice-progress-item {
+  border-top: 1px solid var(--line);
+}
+
+.slice-progress-item.busy {
+  background: color-mix(in srgb, var(--brand) 9%, transparent);
+}
+
+.slice-progress-icon {
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  color: var(--muted);
+}
+
+.slice-progress-item.state-redrawn .slice-progress-icon,
+.slice-progress-item.state-fixed .slice-progress-icon,
+.slice-progress-item.state-ready .slice-progress-icon {
+  color: #1f9d55;
+}
+
+.slice-progress-item.state-review .slice-progress-icon {
+  color: #b7791f;
+}
+
+.slice-progress-item.state-fix .slice-progress-icon,
+.slice-progress-item.state-failed .slice-progress-icon {
+  color: var(--danger);
+}
+
+.slice-progress-thumb {
+  width: 36px;
+  height: 28px;
+  border-radius: 6px;
+  object-fit: contain;
+  background: repeating-conic-gradient(#d9dce3 0% 25%, #f4f5f8 0% 50%) 50% / 10px 10px;
+}
+
+.slice-progress-name {
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slice-progress-state {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slice-progress-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--line);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: startup-spin 0.8s linear infinite;
+}
+
+/* Redraw choice: tick boxes before the AI redraw starts. */
+.editable-preview-loading-dialog[data-state="choose"] .editable-preview-loading-spinner {
+  display: none;
+}
+
+.slice-progress-choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.slice-progress-choice-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.slice-progress-toggle-all {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink-2);
+  background: var(--surface-2);
+  font-size: 11px;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.slice-progress-item.pickable {
+  cursor: pointer;
+}
+
+.slice-progress-item.pickable:not(.picked) {
+  opacity: 0.6;
+}
+
+.slice-progress-item.pickable input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--brand);
+  cursor: pointer;
+}
+
+/* Generate UI: pick one of several design options. */
+.result-choice {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+}
+
+.result-choice-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.result-choice-head strong {
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 820;
+}
+
+.result-choice-grid {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  min-height: 0;
+}
+
+.result-choice-option {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  margin: 0;
+}
+
+.result-choice-preview {
+  display: grid;
+  flex: 1 1 auto;
+  place-items: center;
+  min-height: 240px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  cursor: zoom-in;
+}
+
+.result-choice-preview img {
+  max-width: 100%;
+  max-height: min(64vh, 640px);
+  border-radius: 8px;
+  object-fit: contain;
+}
+
+.result-choice-option figcaption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.result-choice-use {
+  height: 32px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--on-brand);
+  background: var(--brand);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.result-choice-grid.has-zoomed {
+  grid-template-columns: 1fr;
+}
+
+.result-choice-grid.has-zoomed .result-choice-option:not(.zoomed) {
+  display: none;
+}
+
+.result-choice-option.zoomed .result-choice-preview {
+  cursor: zoom-out;
+}
+
+.result-choice-option.zoomed .result-choice-preview img {
+  max-height: calc(100vh - 220px);
 }
