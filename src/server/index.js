@@ -88,9 +88,11 @@ const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 18787);
 // Local data and vendor files live at the repository root, two folders up.
 const PROJECT_ROOT = path.resolve(__dirname, "..", "..");
-const CONFIG_FILE = path.join(PROJECT_ROOT, ".local-provider-config.json");
-const WORKSPACE_HISTORY_DIR = path.join(PROJECT_ROOT, ".uilayercraft-history");
-const LEGACY_WORKSPACE_HISTORY_DIR = path.join(PROJECT_ROOT, ".image-to-slice-history");
+// The desktop app sets UILAYERCRAFT_DATA_DIR so settings and drafts live outside the install folder.
+const DATA_DIR = process.env.UILAYERCRAFT_DATA_DIR || PROJECT_ROOT;
+const CONFIG_FILE = path.join(DATA_DIR, ".local-provider-config.json");
+const WORKSPACE_HISTORY_DIR = path.join(DATA_DIR, ".uilayercraft-history");
+const LEGACY_WORKSPACE_HISTORY_DIR = path.join(DATA_DIR, ".image-to-slice-history");
 // Keep drafts saved before the rename by moving the old history folder once.
 if (!fs.existsSync(WORKSPACE_HISTORY_DIR) && fs.existsSync(LEGACY_WORKSPACE_HISTORY_DIR)) {
   fs.renameSync(LEGACY_WORKSPACE_HISTORY_DIR, WORKSPACE_HISTORY_DIR);

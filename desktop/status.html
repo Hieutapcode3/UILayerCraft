@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>UILayerCraft</title>
+<style>
+  :root { color-scheme: light dark; font-family: "Segoe UI", system-ui, sans-serif; }
+  body { margin: 0; padding: 22px; display: grid; gap: 14px; }
+  h1 { margin: 0; font-size: 18px; }
+  .state { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: #999; }
+  .running .dot { background: #1fb36b; }
+  .starting .dot { background: #e0a100; }
+  .failed .dot, .stopped .dot { background: #d64545; }
+  p { margin: 0; font-size: 13px; opacity: .75; line-height: 1.5; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; }
+  button { padding: 7px 12px; border-radius: 6px; border: 1px solid #8884; background: #8881; font: inherit; cursor: pointer; }
+  button:hover { background: #8883; }
+</style>
+</head>
+<body>
+  <h1>UILayerCraft</h1>
+  <div id="state" class="state starting"><span class="dot"></span><span id="label">Starting…</span></div>
+  <p>Keep this app running while you use the plugin in Figma. You can close this window: the app stays in the system tray (click the ^ arrow near the clock if you cannot see the icon).</p>
+  <p><b>First time on this computer?</b> In Figma Desktop: Plugins → Development → Import plugin from manifest… and pick <code>manifest.json</code> in the plugin folder (button below). You only do this once.</p>
+  <div class="row">
+    <button data-action="plugin">Open plugin folder</button>
+    <button data-action="restart">Restart server</button>
+    <button data-action="log">Open log</button>
+    <button data-action="data">Open data folder</button>
+    <button data-action="hide">Close window</button>
+    <button data-action="quit">Quit app</button>
+  </div>
+<script>
+  document.querySelectorAll("button").forEach((button) =>
+    button.addEventListener("click", () => window.api.action(button.dataset.action)));
+  window.api.onState(({ status, label, port }) => {
+    document.getElementById("state").className = "state " + status;
+    document.getElementById("label").textContent = "API " + label + " - http://127.0.0.1:" + port;
+  });
+  window.api.ready();
+</script>
+</body>
+</html>

@@ -12,3 +12,9 @@ dist/*
 !dist/ui.html
 .idea
 .vscode/
+
+# desktop tray app
+desktop/node_modules/
+desktop/release/
+desktop/build/node.exe
+desktop/build/icon.png

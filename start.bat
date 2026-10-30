@@ -14,6 +14,8 @@ echo  4. Claude Code: log out
 echo  5. Claude Code: log in
 echo  6. Codex CLI: log out
 echo  7. Codex CLI: log in
+echo  8. Install auto-start (API runs in the background at sign-in)
+echo  9. Remove auto-start and stop the API
 echo  0. Exit
 echo.
 set "choice="
@@ -26,6 +28,8 @@ if "%choice%"=="4" call claude auth logout & goto done
 if "%choice%"=="5" call claude auth login & goto done
 if "%choice%"=="6" call codex logout & goto done
 if "%choice%"=="7" call codex login & goto done
+if "%choice%"=="8" call Install-AutoStart.bat & goto menu
+if "%choice%"=="9" call Remove-AutoStart.bat & goto menu
 if "%choice%"=="0" exit /b 0
 goto menu
 
