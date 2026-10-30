@@ -56,7 +56,7 @@ Dự án định nghĩa khái niệm **"AI UI Slicing"** phục vụ trực ti�
 | **Giao diện Plugin & Web UI** | `src/ui/` | **Vanilla JS, HTML5, CSS3** (không dùng framework nặng như React/Vue để tối ưu độ nhẹ và tương thích tốt nhất với Figma iframe). | Quản lý canvas chỉnh sửa, khung xem trước, state management, renderers, giao tiếp API. |
 | **Figma Plugin Main Thread** | `src/plugin/` | **Figma Plugin API** | Chạy trong runtime của Figma, tạo node, frame, import ảnh, vector và đồng bộ canvas. |
 | **Build System** | `scripts/`, configs | **Vite**, `scripts/build-ui-html.js` | Đóng gói mã nguồn UI thành 1 file duy nhất `dist/ui.html` (inline CSS/JS) và bundle main plugin thành `dist/code.js`. |
-| **Backend API Server** | `server.js`, `src/server/` | **Node.js (>= 20.19.0)**, HTTP server tích hợp | Cổng giao tiếp local (mặc định port `18787`), điều phối AI request, lưu cache, quản lý draft. |
+| **Backend API Server** | `src/server/` (entry `src/server/index.js`) | **Node.js (>= 20.19.0)**, HTTP server tích hợp | Cổng giao tiếp local (mặc định port `18787`), điều phối AI request, lưu cache, quản lý draft. |
 | **Xử lý hình ảnh & Vector** | `src/core/`, `src/server/services/` | **Sharp**, `@neplex/vectorizer`, `fast-xml-parser`, `svgpath`, `makerjs` | Cắt ảnh, xử lý độ trong suốt (transparency), resize, nén ảnh, xử lý SVG và chuyển đổi vector. |
 | **Tạo file Figma `.fig` độc lập** | `src/fig-export/` | **openfig-core**, `zstd-codec` | Chuyển đổi định dạng node của Figma thành file `.fig` chuẩn mà không phụ thuộc vào Figma Desktop. |
 | **Bắt giao diện độ trung thực cao** | `src/server/services/` | **Playwright (Chromium)** | Khởi chạy trình duyệt ngầm và dùng CDP đọc layout, render styles phục vụ chuyển đổi Figma chính xác. |

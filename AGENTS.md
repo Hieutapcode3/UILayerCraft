@@ -1,45 +1,42 @@
-# Project Guidelines
+# AGENTS.md — UILayerCraft
 
-This project ships a Figma plugin. Keep changes practical and avoid splitting files only to reduce line count.
+UILayerCraft is a Figma plugin with a local Node API: it slices a flat UI image into separate PNG layers (or editable layers / HTML) with a vision model, and imports them into Figma. This file is the entry point for every coding agent (Codex, Claude, others). Agent-specific files such as `CLAUDE.md` only add how that agent works; they do not fork these rules.
 
-## Source Map
+## 1. Read first, in this order
 
-- `src/plugin/`: Figma main-thread code. Put Figma API calls, node creation, import validation, and import positioning here.
-- `src/ui/app.js`: UI bootstrap and workflow orchestration. It may stay large when a flow is only used once.
-- `src/ui/api/`: Browser-side API wrappers, provider config helpers, storage, and workspace draft calls.
-- `src/ui/state/`: Reusable UI state rules and state transitions.
-- `src/ui/services/`: Reusable business logic that does not belong to a single DOM view.
-- `src/ui/renderers/`: Reusable DOM rendering helpers for panels, dialogs, lists, menus, and controls.
-- `src/ui/ui.template.html`: Source UI shell. Keep script placeholders here.
-- `src/ui/styles.css`: UI styles.
-- `src/vendor/`: Third-party or Figma-provided browser scripts. Keep them local and build-time inlined.
-- `dist/ui.html`: Generated Figma UI artifact. Do not edit it directly.
-- `server.js`: Local backend for config, workspace drafts, AI proxy requests, progress, and image processing.
+1. `AGENTS.md`: this file.
+2. [docs/project-context.md](docs/project-context.md): what the product does, features, stack, workflow.
+3. [standards/folder-structure.md](standards/folder-structure.md): where each kind of code goes.
+4. [handoff/README.md](handoff/README.md), then the newest case's `notes.md`: current state, open issues, test screens.
+5. The rest of [standards/](standards/README.md) when the task touches it (testing, security, Git).
 
-## How To Add Features
+Start from the files the task names; do not scan the whole repository.
 
-1. Search for an existing helper, API wrapper, renderer, or state helper before adding new code.
-2. If code is used once, it can stay near the workflow in `src/ui/app.js`.
-3. If request, state, rendering, or service logic is reused or likely to be reused, put it in the matching module folder.
-4. Do not duplicate backend request logic inside event handlers. Use `fetchBackend()` and existing API helpers.
-5. Do not put Figma API code in UI files.
-6. Do not dynamically load third-party scripts from remote URLs in the plugin UI. Put them in `src/vendor/`.
-7. Do not hand-edit `dist/ui.html`; run `npm run build:ui` after UI source changes.
+## 2. Folders
 
-## Verification
+| Folder | Holds | Changes when |
+|---|---|---|
+| `docs/` | What the product is and how it works | A feature or the architecture changes |
+| `standards/` | Rules for every session: code style, folders, testing, security, Git | A rule changes |
+| `handoff/` | One folder per session or case: `notes.md` + `evidence/` | Every session |
 
-Prefer the full check before committing:
+## 3. Always
 
-```bash
-npm test
-npm run build
-git diff --check
-```
+- Reuse an existing helper, API wrapper, renderer or state module before adding code ([standards/folder-structure.md](standards/folder-structure.md)).
+- Keep Figma API code in `src/plugin/`, backend calls behind `fetchBackend()`, third-party browser scripts in `src/vendor/`.
+- Never hand-edit `dist/`; rebuild with `npm run build`.
+- Verify before reporting done: `npm run build`, `npm test`, `git diff --check` ([standards/testing.md](standards/testing.md)). Slicing changes also get an E2E run on the test screens listed in [handoff/README.md](handoff/README.md).
+- Keep the session's handoff case up to date while working: create `handoff/YYYY-MM-DD-topic/` from `handoff/_template/`, add it to the table in `handoff/README.md`, and put screenshots in its `evidence/`.
 
-For small UI-only edits, at minimum run:
+## 4. Never
 
-```bash
-npm run build:ui
-node --check scripts/build-ui-html.js
-git diff --check
-```
+- Commit `.local-provider-config.json` or `.uilayercraft-history/`, or print API keys ([standards/security-and-data.md](standards/security-and-data.md)).
+- Change the user's model settings or drafts during tests; use a separate copy of the API.
+- Commit to `main` directly or force-push it ([standards/git-flow.md](standards/git-flow.md)).
+- Reintroduce the old `Image To Slice` name or non-English UI text ([standards/code-style.md](standards/code-style.md)).
+
+## 5. Ask the user before
+
+- Changing the slice manifest or `.fig` format that saved drafts and Figma imports depend on.
+- Spending real model quota on long batch runs, or installing software globally.
+- Deleting user data, history or Git history.

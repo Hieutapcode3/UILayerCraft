@@ -7,6 +7,7 @@ const {
   createBackgroundDecompositionReview,
   getBackgroundDecompositionNavigation,
   getCachedBackgroundDecomposition,
+  getMissingOverlaySliceCandidates,
   moveDecompositionBackground,
   moveDecompositionOverlay,
   resizeDecompositionBackground,
@@ -487,4 +488,47 @@ test("decomposition cache clamps persisted geometry while preserving user choice
   assert.equal(restored.backgrounds[0].enabled, false);
   assert.equal(restored.backgrounds[0].overlays[0].remove, false);
   assert.equal(restored.backgrounds[0].overlays[1].remove, true);
+});
+
+test("missing overlay slice candidates skip overlays that are already slices", () => {
+  const review = createBackgroundDecompositionReview({
+    backgrounds: [{
+      id: "panel",
+      name: "cat_ear_panel",
+      bbox: { x: 100, y: 400, width: 880, height: 880 },
+      overlays: [
+        { id: "title", name: "setting_title", kind: "raster-overlay", bbox: { x: 338, y: 562, width: 430, height: 134 } },
+        { id: "restart", name: "restart_button", kind: "code-overlay", bbox: { x: 290, y: 1006, width: 500, height: 190 } }
+      ]
+    }]
+  }, { width: 1081, height: 1920 });
+  const existing = [
+    { placement: { x: 340, y: 560, width: 428, height: 136 } },
+    { placement: { x: 472, y: 1028, width: 132, height: 128 } }
+  ];
+  const candidates = getMissingOverlaySliceCandidates(review, existing);
+  assert.deepEqual(candidates.map((item) => item.name), ["restart_button"]);
+  assert.deepEqual(candidates[0].bbox, { x: 290, y: 1006, width: 500, height: 190 });
+  assert.deepEqual(getMissingOverlaySliceCandidates(toggleDecompositionBackground(review, "panel"), existing), []);
+});
+
+test("missing overlay slice candidates skip pieces of a slice and boxes around several slices", () => {
+  const review = createBackgroundDecompositionReview({
+    backgrounds: [{
+      id: "screen",
+      name: "level_map",
+      bbox: { x: 0, y: 0, width: 1080, height: 1920 },
+      overlays: [
+        { id: "overhang", name: "house_overhang", kind: "raster-overlay", bbox: { x: 436, y: 1644, width: 208, height: 56 } },
+        { id: "path", name: "level_path", kind: "raster-overlay", bbox: { x: 409, y: 0, width: 262, height: 1434 } },
+        { id: "banner", name: "event_banner", kind: "raster-overlay", bbox: { x: 40, y: 300, width: 300, height: 120 } }
+      ]
+    }]
+  }, { width: 1080, height: 1920 });
+  const existing = [
+    { placement: { x: 436, y: 1644, width: 208, height: 200 } },
+    { placement: { x: 428, y: 100, width: 228, height: 234 } },
+    { placement: { x: 428, y: 420, width: 228, height: 234 } }
+  ];
+  assert.deepEqual(getMissingOverlaySliceCandidates(review, existing).map((item) => item.name), ["event_banner"]);
 });

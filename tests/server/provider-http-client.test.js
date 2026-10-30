@@ -47,6 +47,18 @@ test("parseOpenAIResponse reads Gemini's array-wrapped error message", async () 
   );
 });
 
+test("parseOpenAIResponse names the endpoint for a bodyless 404", async () => {
+  await assert.rejects(
+    () => parseOpenAIResponse({
+      ok: false,
+      status: 404,
+      url: "https://generativelanguage.googleapis.com/v1beta/openai/images/edits",
+      text: async () => ""
+    }),
+    (error) => /does not support \/images\/edits/.test(error.message) && error.statusCode === 404
+  );
+});
+
 test("callOpenAIJson posts JSON with bearer auth", async () => {
   const calls = [];
   const client = createProviderHttpClient({

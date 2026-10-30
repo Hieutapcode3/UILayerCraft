@@ -29,6 +29,7 @@ const DEFAULT_APP_SCRIPT_PATHS = [
   "src/ui/services/svg-utils.js",
   "src/ui/services/css-utils.js",
   "src/ui/services/image-color-utils.js",
+  "src/ui/services/slice-layer-isolation.js",
   "src/ui/services/slice-repair.js",
   "src/ui/services/preview-image.js",
   "src/ui/services/editable-reference-assets.js",

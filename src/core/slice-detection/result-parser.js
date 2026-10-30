@@ -1,6 +1,7 @@
 const {
   ALLOWED_SLICE_ASSET_KINDS,
-  MIN_SLICE_ASSET_SIZE
+  MIN_SLICE_ASSET_SIZE,
+  SLICE_ASSET_SHAPES
 } = require("./constants");
 const { normalizeSliceAssetName } = require("../slice-asset-name");
 
@@ -53,6 +54,8 @@ function parseSliceAssetDetectionText(text, { width, height }) {
   sourceAssets.forEach((asset, index) => {
     const kind = String(asset?.kind || "").trim();
     if (!ALLOWED_SLICE_ASSET_KINDS.has(kind)) return;
+    // Elements under a dimming overlay stay part of the background image.
+    if (asset?.behindOverlay === true) return;
     const bbox = normalizeBBox(asset?.bbox, sourceWidth, sourceHeight);
     if (!bbox) return;
     const confidenceValue = Number(asset?.confidence);
@@ -61,13 +64,78 @@ function parseSliceAssetDetectionText(text, { width, height }) {
     assets.push({
       name: modelName || defaultName,
       kind,
+      shape: SLICE_ASSET_SHAPES.has(asset?.shape) ? asset.shape : "free",
       bbox,
       confidence: Number.isFinite(confidenceValue) ? clamp(confidenceValue, 0, 1) : null,
       containsEmbeddedText: asset?.containsEmbeddedText === true,
       reason: String(asset?.reason || "").trim().slice(0, 300)
     });
   });
-  return { assets };
+  mergeContainerTabs(assets);
+  return { assets: assets.filter((asset, index) => !asset.mergedInto && !isPartOfIllustration(asset, assets) && (
+    asset.kind === "progress-bar" || !assets.some((other, otherIndex) => (
+      otherIndex !== index
+      && other.kind !== "progress-bar"
+      && isCutOutPiece(asset.bbox, other.bbox)
+      && (!isCutOutPiece(other.bbox, asset.bbox) || otherIndex < index)
+    ))
+  )) };
+}
+
+// A panel overlapping a larger panel, within its width and sticking out above or below it, is that container's title
+// tab or ribbon: the container's box grows to include it and the tab is dropped, so the popup is one image.
+function mergeContainerTabs(assets, tolerance = 4) {
+  const panels = assets.filter((asset) => asset.kind === "panel")
+    .sort((a, b) => b.bbox.width * b.bbox.height - a.bbox.width * a.bbox.height);
+  for (const container of panels) {
+    if (container.mergedInto) continue;
+    for (const tab of panels) {
+      if (tab === container || tab.mergedInto) continue;
+      const box = container.bbox;
+      const other = tab.bbox;
+      const withinWidth = other.x >= box.x - tolerance && other.x + other.width <= box.x + box.width + tolerance;
+      const overlaps = other.y < box.y + box.height && other.y + other.height > box.y;
+      const sticksOut = other.y < box.y - tolerance || other.y + other.height > box.y + box.height + tolerance;
+      if (!withinWidth || !overlaps || !sticksOut) continue;
+      const top = Math.min(box.y, other.y);
+      const bottom = Math.max(box.y + box.height, other.y + other.height);
+      container.bbox = { ...box, y: top, height: bottom - top };
+      tab.mergedInto = container;
+    }
+  }
+}
+
+// A small picture lying (almost) entirely inside a larger illustration, like fruit in a truck bed, is part of it:
+// cutting it out would leave a hole that has to be painted over in the illustration.
+function isPartOfIllustration(asset, assets) {
+  if (!PICTURE_KINDS.has(asset.kind)) return false;
+  const area = asset.bbox.width * asset.bbox.height;
+  return assets.some((other) => {
+    if (other === asset || other.kind !== "illustration" || other.bbox.width * other.bbox.height <= area * 2) return false;
+    const width = Math.min(asset.bbox.x + asset.bbox.width, other.bbox.x + other.bbox.width) - Math.max(asset.bbox.x, other.bbox.x);
+    const height = Math.min(asset.bbox.y + asset.bbox.height, other.bbox.y + other.bbox.height) - Math.max(asset.bbox.y, other.bbox.y);
+    return width > 0 && height > 0 && width * height >= area * 0.9;
+  });
+}
+
+const PICTURE_KINDS = new Set(["illustration", "icon", "complex-decoration", "photo", "product-image"]);
+
+// A box inside another one that shares at least three of its edges is a piece of it (the part of an icon above a bar)
+// or a duplicate, not a separate layer; a child icon or label sits inside its parent without touching three edges.
+// Progress bars are exempt: a fill legitimately shares three edges with its track.
+function isCutOutPiece(inner, outer, tolerance = 4) {
+  const near = (a, b) => Math.abs(a - b) <= tolerance;
+  const inside = inner.x >= outer.x - tolerance
+    && inner.y >= outer.y - tolerance
+    && inner.x + inner.width <= outer.x + outer.width + tolerance
+    && inner.y + inner.height <= outer.y + outer.height + tolerance;
+  const sharedEdges = [
+    near(inner.x, outer.x),
+    near(inner.y, outer.y),
+    near(inner.x + inner.width, outer.x + outer.width),
+    near(inner.y + inner.height, outer.y + outer.height)
+  ].filter(Boolean).length;
+  return inside && sharedEdges >= 3;
 }
 
 module.exports = {

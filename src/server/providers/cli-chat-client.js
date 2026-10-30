@@ -1,4 +1,4 @@
-const { spawn } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
@@ -30,6 +30,24 @@ const CLI_PRESETS = {
     ],
     imageInstruction: () => "",
     readOutput: (stdout) => JSON.parse(stdout.slice(stdout.indexOf("{"))).response
+  },
+  codex: {
+    models: ["default"],
+    // The prompt comes on stdin (no positional argument, so the repeatable -i flag cannot swallow it);
+    // codex exec prints only the final answer on stdout. The user's config.toml is ignored (login is still used)
+    // so a model or MCP server set there for coding cannot break these requests.
+    buildArgs: ({ model, files }) => [
+      "exec",
+      "--skip-git-repo-check",
+      "--ignore-user-config",
+      "--ephemeral",
+      "--color", "never",
+      "-s", "read-only",
+      ...(model && model !== "default" ? ["-m", model] : []),
+      ...files.flatMap((file) => ["-i", file])
+    ],
+    imageInstruction: () => "",
+    readOutput: (stdout) => stdout.trim()
   }
 };
 
@@ -99,6 +117,15 @@ async function callCliChatCompletion(body, {
     const stdin = [instruction, prompt].filter(Boolean).join("\n\n");
     const stdout = await runCli(name, preset.buildArgs({ model, files }), stdin, {
       cwd: workDir, timeoutMs, signal, createAbortError, spawnImpl
+    }).catch((error) => {
+      if (name === "gemini" && /IneligibleTierError|no longer supported for Gemini Code Assist/i.test(error.message)) {
+        throw Object.assign(new Error(
+          "Gemini CLI is signed in with a Google account, which Google no longer allows for Gemini CLI. "
+          + "Create an API key at https://aistudio.google.com/apikey, save it as GEMINI_API_KEY=<key> in ~/.gemini/.env, "
+          + "run gemini once and choose \"Use Gemini API key\" under /auth, then restart the local API. Or use Claude CLI."
+        ), { statusCode: 502 });
+      }
+      throw error;
     });
     let content;
     try {
@@ -113,6 +140,20 @@ async function callCliChatCompletion(body, {
   } finally {
     await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+// child.kill() only ends the cmd.exe shell on Windows and leaves the real CLI (and its children) running,
+// so a timeout or Cancel would never free the slot. taskkill /T ends the whole process tree.
+function killCliProcess(child, { platform = process.platform, spawnSyncImpl = spawnSync } = {}) {
+  if (platform === "win32" && child?.pid) {
+    try {
+      spawnSyncImpl("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
+      return;
+    } catch {
+      // fall through to the plain kill
+    }
+  }
+  try { child.kill(); } catch { /* already gone */ }
 }
 
 function runCli(command, args, stdin, { cwd, timeoutMs, signal, createAbortError, spawnImpl }) {
@@ -138,11 +179,11 @@ function runCli(command, args, stdin, { cwd, timeoutMs, signal, createAbortError
       else resolve(value);
     };
     const onAbort = () => {
-      child.kill();
+      killCliProcess(child);
       finish(createAbortError("AI request cancelled"));
     };
     const timer = setTimeout(() => {
-      child.kill();
+      killCliProcess(child);
       finish(Object.assign(new Error(`${command} CLI timed out after ${Math.round(timeoutMs / 1000)} seconds`), { statusCode: 504 }));
     }, timeoutMs);
     signal?.addEventListener("abort", onAbort, { once: true });
@@ -171,5 +212,8 @@ module.exports = {
   callCliChatCompletion,
   flattenChatMessages,
   isCliBaseUrl,
-  listCliModels
+  killCliProcess,
+  listCliModels,
+  parseCliBaseUrl,
+  runCli
 };

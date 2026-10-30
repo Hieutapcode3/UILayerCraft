@@ -84,10 +84,13 @@ fi
 
 echo
 echo "Dependencies are ready."
+echo
+# Installs missing Claude/Codex/Gemini CLIs and opens a terminal for each login still needed.
+node scripts/setup-clis.js
 echo "Starting the local API service..."
 echo
 echo "Seeing the line below means startup succeeded:"
-echo "OpenAI image proxy listening on http://127.0.0.1:18787"
+echo "UILayerCraft API listening on http://127.0.0.1:18787"
 echo
 echo "Important: do not close this terminal window while using the Figma plugin."
 echo

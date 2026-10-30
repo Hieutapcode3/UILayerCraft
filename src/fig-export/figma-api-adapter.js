@@ -50,6 +50,12 @@ class ExportNode {
     this.children.push(node);
   }
 
+  insertChild(index, node) {
+    this.appendChild(node);
+    this.children.splice(this.children.indexOf(node), 1);
+    this.children.splice(Math.max(0, Math.min(index, this.children.length)), 0, node);
+  }
+
   _removeChild(node) {
     const index = this.children.indexOf(node);
     if (index >= 0) this.children.splice(index, 1);
@@ -104,8 +110,8 @@ function createFigExportApi() {
       node._svgData = String(svgData || "");
       return node;
     },
-    group(nodes, parent) {
-      return createGroupNode(api, nodes, parent);
+    group(nodes, parent, index) {
+      return createGroupNode(api, nodes, parent, index);
     },
     async loadFontAsync() {},
     viewport: {
@@ -263,7 +269,8 @@ function serializeExportSetting(setting) {
   };
 }
 
-function createGroupNode(api, nodes, parent) {
+// Like figma.group: the group takes `index` in the parent, so the layers keep their paint order.
+function createGroupNode(api, nodes, parent, index) {
   const candidates = (nodes || []).filter((node) => node && !node.removed);
   if (!candidates.length) throw new Error("Cannot create an empty Figma group");
   const container = parent || api.currentPage;
@@ -278,7 +285,8 @@ function createGroupNode(api, nodes, parent) {
   group.resize(maxX - minX, maxY - minY);
   group.resizeToFit = true;
   group.fills = [];
-  container.appendChild(group);
+  if (Number.isInteger(index)) container.insertChild(index, group);
+  else container.appendChild(group);
   for (const node of candidates) {
     node.x -= minX;
     node.y -= minY;

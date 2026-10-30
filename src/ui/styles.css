@@ -71,7 +71,7 @@ textarea,
   display: none;
 }
 
-body.loading-interaction-locked button:not(#windowToggle):not(#editablePreviewCancel):not(#backgroundDecompositionLoadingCancel) {
+body.loading-interaction-locked button:not(#windowToggle):not(#editablePreviewCancel):not(#backgroundDecompositionLoadingCancel):not(#backgroundDecompositionBackground):not(#backgroundDecompositionStartRedraw):not(.slice-progress-toggle-all) {
   pointer-events: none;
   opacity: 0.55;
 }
@@ -143,6 +143,7 @@ button:disabled {
 
 .shell {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: 52px 1fr;
   width: 100vw;
   height: 100vh;
@@ -2970,10 +2971,10 @@ select {
 
 .cut-item {
   display: grid;
-  grid-template-columns: 42px minmax(44px, 1fr) minmax(44px, 1fr) 28px 52px 24px;
+  grid-template-columns: 18px 42px minmax(44px, 1fr) minmax(44px, 1fr) 28px 52px 24px;
   grid-template-areas:
-    "thumb meta meta meta meta meta"
-    "thumb transparent svg visibility settings remove";
+    "handle thumb meta meta meta meta meta"
+    "handle thumb transparent svg visibility settings remove";
   gap: 6px;
   align-items: center;
   min-width: 0;
@@ -3610,17 +3611,24 @@ select {
   outline: none;
 }
 
-.cut-drop-indicator {
-  position: absolute;
-  right: 0;
-  left: 0;
-  z-index: 8;
-  height: 3px;
-  border-radius: 2px;
-  background: var(--brand);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9);
-  pointer-events: none;
+.cut-drag-handle {
+  grid-area: handle;
+  align-self: stretch;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: grab;
+  touch-action: none;
 }
+.cut-drag-handle:hover { background: var(--line); color: var(--ink-2); }
+.cut-drag-handle svg { width: 14px; height: 14px; }
+.cut-item.dragging { position: relative; z-index: 2; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25); }
+.cut-item.dragging .cut-drag-handle { cursor: grabbing; }
 
 .cut-item.reordered {
   animation: cut-item-reordered 240ms ease;
@@ -4424,14 +4432,15 @@ select {
 .model-route-picker-menu button:focus-visible { background: var(--surface-2); }
 .model-route-picker-menu button.selected { background: var(--success-soft); }
 .model-route-picker-empty { padding: 12px 9px; color: var(--muted); font-size: 10px; text-align: center; }
-.model-config-list { display: grid; gap: 12px; }
-.model-config-group { display: grid; gap: 8px; }
+/* minmax(0, 1fr): grid items default to min-width:auto, which lets the nowrap detail line push cards past the panel. */
+.model-config-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.model-config-group { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .model-config-group-title { color: var(--ink-2); font-size: 11px; font-weight: 820; }
-.model-config-group-list { display: grid; gap: 10px; }
+.model-config-group-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .model-config-empty { padding: 22px; border: 1px dashed var(--line-strong); border-radius: 10px; color: var(--muted); text-align: center; font-size: 12px; }
 .model-config-card { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 13px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); }
 .model-config-card.active { border-color: var(--success); background: var(--success-soft); }
-.model-config-card-main { min-width: 0; }
+.model-config-card-main { flex: 1 1 auto; min-width: 0; }
 .model-config-card-title { margin-bottom: 7px; color: var(--ink); font-size: 13px; font-weight: 820; }
 .model-config-detail { margin-top: 7px; overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .model-config-active-use { margin-top: 6px; color: var(--success); font-size: 10px; font-weight: 760; }
@@ -4525,6 +4534,10 @@ select {
 .model-config-tasks { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 13px; padding: 0; border: 0; }
 .model-config-tasks legend { margin-bottom: 7px; color: var(--ink-2); font-size: 10px; font-weight: 760; }
 .model-config-tasks label { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; }
+.model-config-source { margin: 0 0 11px; }
+.model-config-cli-hint { margin: 0 0 11px; color: var(--ink-2); font-size: 11px; }
+.model-config-cli-hint[hidden],
+.model-config-form-grid label[hidden] { display: none; }
 .task-route-title { display: inline-flex; align-items: center; gap: 5px; }
 .task-route-title .import-help {
   width: 18px;
@@ -4798,7 +4811,9 @@ body.collapsed .new-work-trigger {
 
 /* Narrow window: once an image is loaded, give the canvas the generation column. */
 @media (max-width: 1040px) {
-  .step-label {
+  .step-label,
+  .stepper .step::before,
+  .brand span:last-child {
     display: none;
   }
 
@@ -4806,7 +4821,12 @@ body.collapsed .new-work-trigger {
     grid-template-columns: minmax(320px, 1fr) minmax(320px, 360px);
   }
 
+  /* display: contents keeps the fixed Settings/History panels that live inside the sidebar usable. */
   .sidebar.has-result {
+    display: contents;
+  }
+
+  .sidebar.has-result > :not(.settings-panel, .drafts-panel) {
     display: none;
   }
 }
@@ -4834,4 +4854,251 @@ body.collapsed .new-work-trigger {
 .drafts-panel,
 .status {
   box-shadow: 0 0 0 1px var(--line), 0 24px 64px rgba(0, 0, 0, 0.55);
+}
+
+/* AI Slice popup: one row per detected element while it is checked and redrawn. */
+.editable-preview-loading-card.with-slice-progress {
+  width: min(560px, 100%);
+}
+
+.slice-progress-list {
+  box-sizing: border-box;
+  width: 100%;
+  max-height: min(46vh, 420px);
+  margin: 16px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  list-style: none;
+  text-align: left;
+}
+
+.slice-progress-summary {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.slice-progress-item {
+  display: grid;
+  grid-template-columns: 18px 36px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 12px;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.slice-progress-item + .slice-progress-item {
+  border-top: 1px solid var(--line);
+}
+
+.slice-progress-item.busy {
+  background: color-mix(in srgb, var(--brand) 9%, transparent);
+}
+
+.slice-progress-icon {
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  color: var(--muted);
+}
+
+.slice-progress-item.state-redrawn .slice-progress-icon,
+.slice-progress-item.state-fixed .slice-progress-icon,
+.slice-progress-item.state-ready .slice-progress-icon {
+  color: #1f9d55;
+}
+
+.slice-progress-item.state-review .slice-progress-icon {
+  color: #b7791f;
+}
+
+.slice-progress-item.state-fix .slice-progress-icon,
+.slice-progress-item.state-failed .slice-progress-icon {
+  color: var(--danger);
+}
+
+.slice-progress-thumb {
+  width: 36px;
+  height: 28px;
+  border-radius: 6px;
+  object-fit: contain;
+  background: repeating-conic-gradient(#d9dce3 0% 25%, #f4f5f8 0% 50%) 50% / 10px 10px;
+}
+
+.slice-progress-name {
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slice-progress-state {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slice-progress-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--line);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: startup-spin 0.8s linear infinite;
+}
+
+/* Redraw choice: tick boxes before the AI redraw starts. */
+.editable-preview-loading-dialog[data-state="choose"] .editable-preview-loading-spinner {
+  display: none;
+}
+
+.slice-progress-choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.slice-progress-choice-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.slice-progress-toggle-all {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink-2);
+  background: var(--surface-2);
+  font-size: 11px;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.slice-progress-item.pickable {
+  cursor: pointer;
+}
+
+.slice-progress-item.pickable:not(.picked) {
+  opacity: 0.6;
+}
+
+.slice-progress-item.pickable input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--brand);
+  cursor: pointer;
+}
+
+/* Generate UI: pick one of several design options. */
+.result-choice {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+}
+
+.result-choice-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.result-choice-head strong {
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 820;
+}
+
+.result-choice-grid {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  min-height: 0;
+}
+
+.result-choice-option {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  margin: 0;
+}
+
+.result-choice-preview {
+  display: grid;
+  flex: 1 1 auto;
+  place-items: center;
+  min-height: 240px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  cursor: zoom-in;
+}
+
+.result-choice-preview img {
+  max-width: 100%;
+  max-height: min(64vh, 640px);
+  border-radius: 8px;
+  object-fit: contain;
+}
+
+.result-choice-option figcaption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.result-choice-use {
+  height: 32px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--on-brand);
+  background: var(--brand);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.result-choice-grid.has-zoomed {
+  grid-template-columns: 1fr;
+}
+
+.result-choice-grid.has-zoomed .result-choice-option:not(.zoomed) {
+  display: none;
+}
+
+.result-choice-option.zoomed .result-choice-preview {
+  cursor: zoom-out;
+}
+
+.result-choice-option.zoomed .result-choice-preview img {
+  max-height: calc(100vh - 220px);
 }

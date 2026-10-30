@@ -194,7 +194,11 @@ function parseOpenAIResponseText(response, text) {
   if (!response.ok) {
     // Gemini's OpenAI-compatible endpoint wraps errors in an array: [{ "error": { ... } }].
     const payload = Array.isArray(data) ? data[0] : data;
-    const message = payload?.error?.message || `OpenAI request failed: ${response.status}`;
+    // A bodyless 404 means the provider has no such endpoint (e.g. Gemini has no /images/edits).
+    const endpoint = response.url ? new URL(response.url).pathname.replace(/^.*(\/(?:chat|images)\/)/, "$1") : "";
+    const message = payload?.error?.message || (response.status === 404 && !text
+      ? `The model provider does not support ${endpoint || "this endpoint"} (404). Use a provider that implements it.`
+      : `OpenAI request failed: ${response.status}`);
     const error = new Error(message);
     error.statusCode = response.status;
     throw error;

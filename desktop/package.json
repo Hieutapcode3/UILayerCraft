@@ -1,0 +1,41 @@
+{
+  "name": "uilayercraft-desktop",
+  "version": "1.2.0",
+  "description": "Tray app that runs the UILayerCraft API in the background.",
+  "private": true,
+  "main": "main.js",
+  "author": "Hieutapcode3",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "prepare-bundle": "node prepare.js",
+    "dist": "node prepare.js && electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.hieutapcode3.uilayercraft",
+    "productName": "UILayerCraft",
+    "directories": { "output": "release" },
+    "files": ["main.js", "preload.js", "status.html", "build/icon.png"],
+    "icon": "build/icon.png",
+    "extraResources": [
+      { "from": "../src", "to": "server/src" },
+      { "from": "../dist", "to": "server/dist" },
+      { "from": "../package.json", "to": "server/package.json" },
+      { "from": "../figma-sim.html", "to": "server/figma-sim.html" },
+      {
+        "from": "../node_modules",
+        "to": "server/node_modules",
+        "filter": ["**/*", "!vite/**", "!@rolldown/**", "!rolldown/**", "!esbuild/**", "!@esbuild/**", "!playwright-core/.local-browsers/**"]
+      },
+      { "from": "../manifest.json", "to": "plugin/manifest.json" },
+      { "from": "../dist", "to": "plugin/dist" },
+      { "from": "build/node.exe", "to": "node.exe" }
+    ],
+    "win": { "target": "nsis", "icon": "build/icon.png" },
+    "nsis": { "artifactName": "UILayerCraft-Setup-${version}.${ext}", "oneClick": true, "perMachine": false, "deleteAppDataOnUninstall": false }
+  }
+}

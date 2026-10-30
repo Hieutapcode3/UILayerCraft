@@ -159,6 +159,8 @@
               <div class="model-config-dialog-body">
                 <form id="modelConfigForm" class="model-config-form">
                   <input id="modelConfigId" type="hidden" />
+                  <fieldset class="model-config-tasks model-config-source"><legend data-i18n="legend_source">Connection</legend><label><input type="radio" name="modelConfigSource" value="api" checked /><span data-i18n="source_api">API key</span></label><label><input type="radio" name="modelConfigSource" value="cli://claude" />Claude CLI</label><label><input type="radio" name="modelConfigSource" value="cli://gemini" />Gemini CLI</label><label><input type="radio" name="modelConfigSource" value="cli://codex" />Codex CLI</label></fieldset>
+                  <p id="modelConfigCliHint" class="model-config-cli-hint" hidden data-i18n="cli_hint">No API key needed. Uses the CLI already logged in on this machine. Claude and Gemini CLIs read images; Codex CLI can also generate and edit images.</p>
                   <div class="model-config-form-grid">
                     <label><span data-i18n="form_name">Note / Name (Optional)</span><input id="modelConfigName" type="text" autocomplete="off" placeholder="e.g.: Official OpenAI" data-i18n-placeholder="form_name_placeholder" /></label>
                     <label><span data-i18n="form_base_url">Base URL</span><input id="modelConfigBaseUrl" type="url" placeholder="https://api.openai.com" required /></label>
@@ -198,8 +200,10 @@
               <div class="cut-head-actions">
                 <button id="exportSlices" class="cut-batch" type="button" disabled data-i18n="export_slices">Export Slices</button>
                 <button id="transparentAll" class="cut-batch" type="button" disabled data-i18n="transparent_all">All Transparent</button>
+                <button id="redrawAllSlices" class="cut-batch" type="button" disabled title="Check every slice and redraw the ones that are not ready for Unity at 4x with the image model (Codex). Each slice takes about 30-100 s.">AI Redraw All</button>
                 <button id="toggleAllSlices" class="cut-batch" type="button" disabled data-i18n="toggle_all_slices_hide">Hide All</button>
                 <button id="repairPreview" class="cut-batch" type="button" disabled data-i18n="repair_preview">Preview Inpaint</button>
+                <button id="genFullBackground" class="cut-batch" type="button" disabled data-i18n="gen_full_background" title="Patch out all slices with Preview Inpaint, then crop each detected background container (no AI model needed)">Gen Full Background</button>
               </div>
             </div>
             <div id="cutGrid" class="cut-grid"></div>
@@ -335,7 +339,12 @@
           <strong id="backgroundDecompositionLoadingTitle" data-i18n="loading_ai_decomp">AI Slicing in Progress</strong>
           <span id="backgroundDecompositionLoadingDescription" class="editable-preview-loading-description" data-i18n="loading_ai_decomp_desc">Identifying regular slices, full background, and overlay elements…</span>
           <span id="backgroundDecompositionElapsed" class="editable-preview-elapsed">Elapsed 0s</span>
-          <button id="backgroundDecompositionLoadingCancel" class="editable-preview-cancel" type="button" data-i18n="btn_cancel">Cancel</button>
+          <ol id="backgroundDecompositionProgressList" class="slice-progress-list" aria-live="polite" hidden></ol>
+          <div class="editable-preview-loading-actions">
+            <button id="backgroundDecompositionStartRedraw" class="editable-preview-retry" type="button" hidden>AI redraw selected</button>
+            <button id="backgroundDecompositionBackground" class="editable-preview-retry" type="button" hidden>Run in background</button>
+            <button id="backgroundDecompositionLoadingCancel" class="editable-preview-cancel" type="button" data-i18n="btn_cancel">Cancel</button>
+          </div>
         </div>
       </section>
       <section id="backgroundDecompositionDialog" class="background-decomposition-dialog" aria-hidden="true" aria-modal="true" aria-labelledby="backgroundDecompositionTitle">

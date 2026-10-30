@@ -1,10 +1,4 @@
-# Handoffs
-
-Progress log for UILayerCraft. Newest session first. Each entry records what changed, how it was verified, open issues and next steps (see [STANDARDS.md](STANDARDS.md)).
-
----
-
-## 2026-10-20: Rebrand, real-image E2E runs, docs
+# 2026-10-20: Rebrand, real-image E2E runs, docs
 
 Branch: `dev/Hieuthu3` (not merged into `main`).
 
@@ -14,7 +8,7 @@ Branch: `dev/Hieuthu3` (not merged into `main`).
 - **Local data migration**: the history folder is now `.uilayercraft-history/`; on startup the server moves an existing `.image-to-slice-history/` there once, so saved drafts survive the rename.
 - **Original author references removed** from README, docs, code defaults (an old third-party relay URL in the legacy config migration), and the README screenshots (replaced with screenshots of this build). `LICENSE` keeps the original MIT copyright line next to the new one, because the MIT license requires it.
 - **README rewritten** for UILayerCraft, with a worked example and a vision-model comparison.
-- **New docs**: `STANDARDS.md`, this file.
+- **New docs**: `STANDARDS.md` and `HANDOFFS.md` (now split into [standards/](../../standards/README.md) and [handoff/](../README.md)).
 - **Example outputs** in `examples/out-of-moves/` from the real runs below.
 
 ### Bugs found by testing and fixed
@@ -55,14 +49,4 @@ Branch: `dev/Hieuthu3` (not merged into `main`).
 1. Restart `npm run api`, re-run case 3 and confirm the UI shows "…no longer available".
 2. Run "Generate Full Background" on the example and check both inpaint versions.
 3. Import `examples/out-of-moves/*.fig` into Figma and check names, positions and text layers.
-4. When the above is accepted, merge `dev/Hieuthu3` into `main` (see GITFLOW.md).
-
----
-
-## 2026-10-19: UI redesign, CLI vision provider, English-only UI, CI
-
-- Dark, Figma-style UI with a 3-step top bar (Load Image → AI Slice → Export), generation sidebar, canvas, and Slice Assets panel; colors are theme tokens that follow Figma's light/dark theme.
-- `cli://claude` and `cli://gemini` vision providers: AI Slice and AI Layer Import without an API key.
-- UI made English-only; the language switcher was removed (the Vietnamese dictionary is kept in `i18n.js` for a future switch).
-- Removed an unused QR image, a manual Playwright probe and the old Chinese-named deploy scripts.
-- Added GitHub Actions CI and GITFLOW.md; pushed `main` and `dev/Hieuthu3` to `Hieutapcode3/UILayerCraft`. CI green on both.
+4. When the above is accepted, merge `dev/Hieuthu3` into `main` (see [standards/git-flow.md](../../standards/git-flow.md)).

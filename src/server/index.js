@@ -8,7 +8,7 @@ const {
   buildBackgroundDecompositionPrompt,
   buildBackgroundDecompositionJsonRepairPrompt,
   parseUiDecompositionText
-} = require("./src/core/background-decomposition");
+} = require("../core/background-decomposition");
 const {
   createModelConfigId,
   createTaskConfigSnapshot,
@@ -16,78 +16,89 @@ const {
   resolveTaskConfig,
   summarizeModelConfig,
   validateModelConfigInput
-} = require("./src/server/config/model-config");
+} = require("./config/model-config");
+const {
+  detectCliTools,
+  planCliTaskRouting
+} = require("./services/cli-setup");
 const {
   loadLocalConfig,
   saveLocalConfig: saveLocalConfigFile
-} = require("./src/server/storage/local-config-store");
+} = require("./storage/local-config-store");
 const {
   createWorkspaceDraftStore
-} = require("./src/server/storage/workspace-draft-store");
+} = require("./storage/workspace-draft-store");
 const {
   listProviderModels
-} = require("./src/server/providers/provider-http-client");
+} = require("./providers/provider-http-client");
 const {
   reconstructFastEditableHtml
-} = require("./src/server/services/fast-editable-html");
+} = require("./services/fast-editable-html");
 const {
   createModelRequestContext
-} = require("./src/server/services/model-request-context");
+} = require("./services/model-request-context");
 const {
   createPlaywrightFigmaCaptureService
-} = require("./src/server/services/playwright-figma-capture");
+} = require("./services/playwright-figma-capture");
 const {
   requestUiDecompositionText
-} = require("./src/server/services/ui-decomposition-request");
+} = require("./services/ui-decomposition-request");
 const {
   testModelConfig
-} = require("./src/server/services/model-config-tester");
+} = require("./services/model-config-tester");
 const {
   requestWithTransparentBackgroundFallback
-} = require("./src/server/services/transparent-image-request");
+} = require("./services/transparent-image-request");
 const {
   sanitizeFastGeneratedHtml
-} = require("./src/server/services/fast-html-sanitizer");
+} = require("./services/fast-html-sanitizer");
 const {
   createAiInpaintCapabilityFixture,
   createNativeInpaintForm,
   prepareAiInpaintInputs,
   restoreAiInpaintImage,
   runAiInpaintRoute
-} = require("./src/server/services/ai-inpaint");
+} = require("./services/ai-inpaint");
 const {
   createWorkspaceRoutes
-} = require("./src/server/routes/workspace-routes");
+} = require("./routes/workspace-routes");
 const {
   createProgressRoutes
-} = require("./src/server/routes/progress-routes");
+} = require("./routes/progress-routes");
 const {
   createImageRoutes
-} = require("./src/server/routes/image-routes");
+} = require("./routes/image-routes");
 const {
   createAssetRoutes
-} = require("./src/server/routes/asset-routes");
+} = require("./routes/asset-routes");
 const {
   createDesignRoutes
-} = require("./src/server/routes/design-routes");
+} = require("./routes/design-routes");
 const {
   createModelConfigRoutes
-} = require("./src/server/routes/model-config-routes");
+} = require("./routes/model-config-routes");
 const {
   exportFigManifest
-} = require("./src/fig-export/export-fig");
+} = require("../fig-export/export-fig");
+
+const { createSharpImageOps, upscaleSliceAsset } = require("./services/asset-upscale");
+const { requestImageOptions } = require("./services/image-options");
 
 const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 18787);
-const CONFIG_FILE = path.join(__dirname, ".local-provider-config.json");
-const WORKSPACE_HISTORY_DIR = path.join(__dirname, ".uilayercraft-history");
-const LEGACY_WORKSPACE_HISTORY_DIR = path.join(__dirname, ".image-to-slice-history");
+// Local data and vendor files live at the repository root, two folders up.
+const PROJECT_ROOT = path.resolve(__dirname, "..", "..");
+// The desktop app sets UILAYERCRAFT_DATA_DIR so settings and drafts live outside the install folder.
+const DATA_DIR = process.env.UILAYERCRAFT_DATA_DIR || PROJECT_ROOT;
+const CONFIG_FILE = path.join(DATA_DIR, ".local-provider-config.json");
+const WORKSPACE_HISTORY_DIR = path.join(DATA_DIR, ".uilayercraft-history");
+const LEGACY_WORKSPACE_HISTORY_DIR = path.join(DATA_DIR, ".image-to-slice-history");
 // Keep drafts saved before the rename by moving the old history folder once.
 if (!fs.existsSync(WORKSPACE_HISTORY_DIR) && fs.existsSync(LEGACY_WORKSPACE_HISTORY_DIR)) {
   fs.renameSync(LEGACY_WORKSPACE_HISTORY_DIR, WORKSPACE_HISTORY_DIR);
 }
 const FIGMA_CAPTURE_RUNTIME = fs.readFileSync(
-  path.join(__dirname, "src/vendor/figma-capture.js"),
+  path.join(PROJECT_ROOT, "src/vendor/figma-capture.js"),
   "utf8"
 );
 const playwrightFigmaCaptureService = createPlaywrightFigmaCaptureService({
@@ -238,7 +249,23 @@ async function createWorkspaceDraftThumbnail(draft) {
 server.listen(PORT, HOST, () => {
   console.log(`UILayerCraft API listening on http://${HOST}:${PORT}`);
   console.log(`Model configs: ${modelConfigState.modelConfigs.length}`);
+  setImmediate(routeTasksToInstalledClis);
 });
+
+// Tasks without a model go to logged-in CLIs: Claude reads images, Codex generates and edits them.
+function routeTasksToInstalledClis() {
+  try {
+    const tools = detectCliTools();
+    console.log(`AI CLIs: ${tools.map((tool) => `${tool.name} ${tool.loggedIn ? "ready" : tool.installed ? "not logged in" : "missing"}`).join(", ")}`);
+    const plan = planCliTaskRouting(modelConfigState, tools, createModelConfigId);
+    if (!plan) return;
+    mutateModelConfigState(() => plan.state).then(() => {
+      plan.assigned.forEach(({ cli, tasks }) => console.log(`Routed ${tasks.join(" + ")} to cli://${cli}`));
+    }).catch((error) => console.warn("Could not route tasks to CLIs:", error.message || String(error)));
+  } catch (error) {
+    console.warn("Could not check AI CLIs:", error.message || String(error));
+  }
+}
 
 let shutdownPromise = null;
 function shutdownServer() {
@@ -408,70 +435,62 @@ function failAiProgress(progressId, message) {
   finishAiProgress(progressId, "failed", message);
 }
 
+// payload.count (1-4) design options, requested at the same time.
 async function generateImage(payload, requestContext) {
   const config = requestContext.config;
-  const prompt = buildRequestedAspectPrompt(
+  const basePrompt = buildRequestedAspectPrompt(
     buildUiScreenshotPrompt(assertString(payload.prompt, "prompt")),
     payload.width,
     payload.height
   );
-  const count = 1;
-  const body = {
-    model: config.model,
-    prompt,
-    size: toProviderImageSize(payload.width, payload.height, config),
-    quality: payload.quality || "high",
-    output_format: payload.outputFormat || "png",
-    background: payload.background || "opaque",
-    n: count
-  };
-
-  const data = await requestContext.callJson("/v1/images/generations", body);
-  return {
-    ...(await normalizeImageResponse(data)),
-    provider: {
-      baseUrl: config.baseUrl,
+  const size = toProviderImageSize(payload.width, payload.height, config);
+  return requestImageOptions(basePrompt, payload.count, async (prompt) => {
+    const data = await requestContext.callJson("/v1/images/generations", {
       model: config.model,
-      size: body.size
-    }
-  };
+      prompt,
+      size,
+      quality: payload.quality || "high",
+      output_format: payload.outputFormat || "png",
+      background: payload.background || "opaque",
+      n: 1
+    });
+    return {
+      ...(await normalizeImageResponse(data)),
+      provider: { baseUrl: config.baseUrl, model: config.model, size }
+    };
+  });
 }
 
 async function editImage(payload, requestContext) {
   const config = requestContext.config;
-  const prompt = buildRequestedAspectPrompt(
+  const basePrompt = buildRequestedAspectPrompt(
     buildUiScreenshotPrompt(assertString(payload.prompt, "prompt")),
     payload.width,
     payload.height
   );
-  const count = 1;
   const images = Array.isArray(payload.images) ? payload.images : [];
   if (images.length === 0) {
     throw badRequest("images must contain at least one data URL image");
   }
-  const form = new FormData();
-  form.set("model", config.model);
-  form.set("prompt", prompt);
-  form.set("size", toProviderImageSize(payload.width, payload.height, config));
-  form.set("quality", payload.quality || "high");
-  form.set("output_format", payload.outputFormat || "png");
-  form.set("background", payload.background || "opaque");
-  form.set("n", String(count));
-
-  images.slice(0, 16).forEach((image, index) => {
-    const file = dataUrlToFile(image.dataUrl, image.name || `reference-${index + 1}.png`);
-    form.append("image[]", file);
+  const size = toProviderImageSize(payload.width, payload.height, config);
+  return requestImageOptions(basePrompt, payload.count, async (prompt) => {
+    const form = new FormData();
+    form.set("model", config.model);
+    form.set("prompt", prompt);
+    form.set("size", size);
+    form.set("quality", payload.quality || "high");
+    form.set("output_format", payload.outputFormat || "png");
+    form.set("background", payload.background || "opaque");
+    form.set("n", "1");
+    images.slice(0, 16).forEach((image, index) => {
+      form.append("image[]", dataUrlToFile(image.dataUrl, image.name || `reference-${index + 1}.png`));
+    });
+    const data = await requestContext.callForm("/v1/images/edits", form);
+    return {
+      ...(await normalizeImageResponse(data)),
+      provider: { baseUrl: config.baseUrl, model: config.model, size }
+    };
   });
-
-  const data = await requestContext.callForm("/v1/images/edits", form);
-  return {
-    ...(await normalizeImageResponse(data)),
-    provider: {
-      baseUrl: config.baseUrl,
-      model: config.model,
-      size: toProviderImageSize(payload.width, payload.height, config)
-    }
-  };
 }
 
 async function generateTransparentAsset(payload, requestContext) {
@@ -499,6 +518,15 @@ async function generateTransparentAsset(payload, requestContext) {
 }
 
 async function redrawAsset(payload, requestContext) {
+  if (payload.mode === "upscale") {
+    return upscaleSliceAsset(payload, requestContext, {
+      imageOps: createSharpImageOps(await loadSharpModule()),
+      // CLI providers (cli://codex) choose their own canvas; an API gets the closest supported size.
+      toImageSize: (width, height, config) => (/^cli:\/\//i.test(config?.baseUrl || "") ? "" : toOpenAIImageSize(width, height)),
+      dataUrlToFile,
+      normalizeImageResponse
+    });
+  }
   const config = requestContext.config;
   const dataUrl = assertString(payload.dataUrl, "dataUrl");
   const maskDataUrl = payload.maskDataUrl;

@@ -193,6 +193,28 @@ function hasSlicePlacementChanged(previous, next) {
   return ["x", "y", "width", "height"].some((field) => previous[field] !== next[field]);
 }
 
+// True when inner sits inside outer (within a few pixels of AI bbox slack) and is clearly smaller.
+function slicePlacementContains(outer, inner, tolerance = 4) {
+  if (!outer || !inner) return false;
+  return inner.x >= outer.x - tolerance
+    && inner.y >= outer.y - tolerance
+    && inner.x + inner.width <= outer.x + outer.width + tolerance
+    && inner.y + inner.height <= outer.y + outer.height + tolerance
+    && inner.width * inner.height < outer.width * outer.height * 0.9;
+}
+
+// Slices import bottom-to-top in array order, so a container must sit before every slice it contains.
+function placeSliceBelowContained(assets, asset) {
+  const currentIndex = assets.indexOf(asset);
+  if (currentIndex < 0) return;
+  const firstContainedIndex = assets.findIndex((other) => (
+    other !== asset && slicePlacementContains(asset.placement, other.placement)
+  ));
+  if (firstContainedIndex < 0 || firstContainedIndex > currentIndex) return;
+  assets.splice(currentIndex, 1);
+  assets.splice(firstContainedIndex, 0, asset);
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     calculateDraggedSliceRadius,
@@ -206,7 +228,9 @@ if (typeof module !== "undefined") {
     normalizeDraftRect,
     normalizeEditedPlacement,
     normalizeSlicePlacement,
+    placeSliceBelowContained,
     pointToScreenCoords,
-    setSliceCornerRadius
+    setSliceCornerRadius,
+    slicePlacementContains
   };
 }

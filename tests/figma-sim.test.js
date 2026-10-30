@@ -169,3 +169,20 @@ test("fig export and simulator adapters expose the same Figma-facing node tree",
   }));
   assert.deepEqual(readTree(figExportApi), readTree(simulatorApi));
 });
+
+test("simulated and .fig group() keep the group at the requested paint index", () => {
+  for (const figmaApi of [createSimulatorFigmaApi(), createFigExportApi()]) {
+    const frame = figmaApi.createFrame();
+    const [back, pill, text, front] = ["back", "pill", "text", "front"].map((name) => {
+      const node = figmaApi.createRectangle();
+      node.name = name;
+      frame.appendChild(node);
+      return node;
+    });
+    figmaApi.group([pill, text], frame, frame.children.indexOf(pill));
+    assert.deepEqual(frame.children.map((node) => node.name), ["back", "Group", "front"]);
+    assert.deepEqual(frame.children[1].children, [pill, text]);
+    assert.equal(back.parent, frame);
+    assert.equal(front.parent, frame);
+  }
+});

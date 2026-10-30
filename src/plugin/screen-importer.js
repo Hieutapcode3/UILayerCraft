@@ -37,6 +37,7 @@ async function createUiAssetScreen({ figmaApi, atob, notifyRecoverableError, man
     frame.appendChild(preview);
 
     const selectedAssets = manifest.assets.filter((asset) => asset.selected !== false);
+    const nodesById = new Map();
     for (const asset of selectedAssets) {
       const node = await createAssetNode({
         figmaApi,
@@ -54,7 +55,9 @@ async function createUiAssetScreen({ figmaApi, atob, notifyRecoverableError, man
       ];
       node.setPluginData("assetManifest", JSON.stringify(createPluginDataAssetManifest(asset)));
       frame.appendChild(node);
+      if (asset.id) nodesById.set(asset.id, node);
     }
+    nestContainedAssetNodes({ figmaApi, frame, assets: selectedAssets, nodesById, notifyRecoverableError });
 
     figmaApi.currentPage.selection = [frame];
     figmaApi.viewport.scrollAndZoomIntoView([frame]);
@@ -188,6 +191,33 @@ async function createEditableDesignScreen({
     if (reference && !reference.removed) reference.remove();
     if (!frame.removed) frame.remove();
     throw error;
+  }
+}
+
+// Groups each container slice with the slices inside it (parentId comes from the UI), smallest containers first,
+// so a button group holds its icon and the panel group holds the button group.
+function nestContainedAssetNodes({ figmaApi, frame, assets, nodesById, notifyRecoverableError }) {
+  const assetsById = new Map(assets.map((asset) => [asset.id, asset]));
+  const childrenByParent = new Map();
+  for (const asset of assets) {
+    if (!nodesById.has(asset.id) || !nodesById.has(asset.parentId) || asset.parentId === asset.id) continue;
+    if (!childrenByParent.has(asset.parentId)) childrenByParent.set(asset.parentId, []);
+    childrenByParent.get(asset.parentId).push(asset.id);
+  }
+  const area = (id) => assetsById.get(id).placement.width * assetsById.get(id).placement.height;
+  const groupsById = new Map();
+  const topNode = (id) => groupsById.get(id) || nodesById.get(id);
+  for (const parentId of [...childrenByParent.keys()].sort((a, b) => area(a) - area(b))) {
+    const members = [parentId, ...childrenByParent.get(parentId)].map(topNode);
+    if (members.some((node) => node.parent && node.parent !== frame)) continue;
+    try {
+      const index = Math.min(...members.map((node) => frame.children.indexOf(node)).filter((value) => value >= 0));
+      const group = figmaApi.group(members, frame, Number.isFinite(index) ? index : undefined);
+      group.name = `${assetsById.get(parentId).name}_group`;
+      groupsById.set(parentId, group);
+    } catch (error) {
+      notifyRecoverableError?.(`Failed to group slices inside ${assetsById.get(parentId).name}`, error);
+    }
   }
 }
 

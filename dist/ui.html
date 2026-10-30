@@ -78,7 +78,7 @@
         display: none;
       }
 
-      body.loading-interaction-locked button:not(#windowToggle):not(#editablePreviewCancel):not(#backgroundDecompositionLoadingCancel) {
+      body.loading-interaction-locked button:not(#windowToggle):not(#editablePreviewCancel):not(#backgroundDecompositionLoadingCancel):not(#backgroundDecompositionBackground):not(#backgroundDecompositionStartRedraw):not(.slice-progress-toggle-all) {
         pointer-events: none;
         opacity: 0.55;
       }
@@ -150,6 +150,7 @@
 
       .shell {
         display: grid;
+        grid-template-columns: minmax(0, 1fr);
         grid-template-rows: 52px 1fr;
         width: 100vw;
         height: 100vh;
@@ -2977,10 +2978,10 @@
 
       .cut-item {
         display: grid;
-        grid-template-columns: 42px minmax(44px, 1fr) minmax(44px, 1fr) 28px 52px 24px;
+        grid-template-columns: 18px 42px minmax(44px, 1fr) minmax(44px, 1fr) 28px 52px 24px;
         grid-template-areas:
-          "thumb meta meta meta meta meta"
-          "thumb transparent svg visibility settings remove";
+          "handle thumb meta meta meta meta meta"
+          "handle thumb transparent svg visibility settings remove";
         gap: 6px;
         align-items: center;
         min-width: 0;
@@ -3617,17 +3618,24 @@
         outline: none;
       }
 
-      .cut-drop-indicator {
-        position: absolute;
-        right: 0;
-        left: 0;
-        z-index: 8;
-        height: 3px;
-        border-radius: 2px;
-        background: var(--brand);
-        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9);
-        pointer-events: none;
+      .cut-drag-handle {
+        grid-area: handle;
+        align-self: stretch;
+        display: grid;
+        place-items: center;
+        width: 18px;
+        padding: 0;
+        border: 0;
+        border-radius: 5px;
+        background: transparent;
+        color: var(--muted);
+        cursor: grab;
+        touch-action: none;
       }
+      .cut-drag-handle:hover { background: var(--line); color: var(--ink-2); }
+      .cut-drag-handle svg { width: 14px; height: 14px; }
+      .cut-item.dragging { position: relative; z-index: 2; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25); }
+      .cut-item.dragging .cut-drag-handle { cursor: grabbing; }
 
       .cut-item.reordered {
         animation: cut-item-reordered 240ms ease;
@@ -4431,14 +4439,15 @@
       .model-route-picker-menu button:focus-visible { background: var(--surface-2); }
       .model-route-picker-menu button.selected { background: var(--success-soft); }
       .model-route-picker-empty { padding: 12px 9px; color: var(--muted); font-size: 10px; text-align: center; }
-      .model-config-list { display: grid; gap: 12px; }
-      .model-config-group { display: grid; gap: 8px; }
+      /* minmax(0, 1fr): grid items default to min-width:auto, which lets the nowrap detail line push cards past the panel. */
+      .model-config-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+      .model-config-group { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
       .model-config-group-title { color: var(--ink-2); font-size: 11px; font-weight: 820; }
-      .model-config-group-list { display: grid; gap: 10px; }
+      .model-config-group-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
       .model-config-empty { padding: 22px; border: 1px dashed var(--line-strong); border-radius: 10px; color: var(--muted); text-align: center; font-size: 12px; }
       .model-config-card { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 13px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); }
       .model-config-card.active { border-color: var(--success); background: var(--success-soft); }
-      .model-config-card-main { min-width: 0; }
+      .model-config-card-main { flex: 1 1 auto; min-width: 0; }
       .model-config-card-title { margin-bottom: 7px; color: var(--ink); font-size: 13px; font-weight: 820; }
       .model-config-detail { margin-top: 7px; overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
       .model-config-active-use { margin-top: 6px; color: var(--success); font-size: 10px; font-weight: 760; }
@@ -4532,6 +4541,10 @@
       .model-config-tasks { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 13px; padding: 0; border: 0; }
       .model-config-tasks legend { margin-bottom: 7px; color: var(--ink-2); font-size: 10px; font-weight: 760; }
       .model-config-tasks label { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; }
+      .model-config-source { margin: 0 0 11px; }
+      .model-config-cli-hint { margin: 0 0 11px; color: var(--ink-2); font-size: 11px; }
+      .model-config-cli-hint[hidden],
+      .model-config-form-grid label[hidden] { display: none; }
       .task-route-title { display: inline-flex; align-items: center; gap: 5px; }
       .task-route-title .import-help {
         width: 18px;
@@ -4805,7 +4818,9 @@
 
       /* Narrow window: once an image is loaded, give the canvas the generation column. */
       @media (max-width: 1040px) {
-        .step-label {
+        .step-label,
+        .stepper .step::before,
+        .brand span:last-child {
           display: none;
         }
 
@@ -4813,7 +4828,12 @@
           grid-template-columns: minmax(320px, 1fr) minmax(320px, 360px);
         }
 
+        /* display: contents keeps the fixed Settings/History panels that live inside the sidebar usable. */
         .sidebar.has-result {
+          display: contents;
+        }
+
+        .sidebar.has-result > :not(.settings-panel, .drafts-panel) {
           display: none;
         }
       }
@@ -4841,6 +4861,253 @@
       .drafts-panel,
       .status {
         box-shadow: 0 0 0 1px var(--line), 0 24px 64px rgba(0, 0, 0, 0.55);
+      }
+
+      /* AI Slice popup: one row per detected element while it is checked and redrawn. */
+      .editable-preview-loading-card.with-slice-progress {
+        width: min(560px, 100%);
+      }
+
+      .slice-progress-list {
+        box-sizing: border-box;
+        width: 100%;
+        max-height: min(46vh, 420px);
+        margin: 16px 0 0;
+        padding: 0;
+        overflow-y: auto;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        list-style: none;
+        text-align: left;
+      }
+
+      .slice-progress-summary {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--line);
+        background: var(--surface);
+        color: var(--ink-2);
+        font-size: 12px;
+        font-weight: 760;
+      }
+
+      .slice-progress-item {
+        display: grid;
+        grid-template-columns: 18px 36px minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+        padding: 6px 12px;
+        color: var(--ink-2);
+        font-size: 12px;
+        font-weight: 650;
+      }
+
+      .slice-progress-item + .slice-progress-item {
+        border-top: 1px solid var(--line);
+      }
+
+      .slice-progress-item.busy {
+        background: color-mix(in srgb, var(--brand) 9%, transparent);
+      }
+
+      .slice-progress-icon {
+        display: grid;
+        place-items: center;
+        font-weight: 900;
+        color: var(--muted);
+      }
+
+      .slice-progress-item.state-redrawn .slice-progress-icon,
+      .slice-progress-item.state-fixed .slice-progress-icon,
+      .slice-progress-item.state-ready .slice-progress-icon {
+        color: #1f9d55;
+      }
+
+      .slice-progress-item.state-review .slice-progress-icon {
+        color: #b7791f;
+      }
+
+      .slice-progress-item.state-fix .slice-progress-icon,
+      .slice-progress-item.state-failed .slice-progress-icon {
+        color: var(--danger);
+      }
+
+      .slice-progress-thumb {
+        width: 36px;
+        height: 28px;
+        border-radius: 6px;
+        object-fit: contain;
+        background: repeating-conic-gradient(#d9dce3 0% 25%, #f4f5f8 0% 50%) 50% / 10px 10px;
+      }
+
+      .slice-progress-name {
+        overflow: hidden;
+        color: var(--ink);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .slice-progress-state {
+        max-width: 220px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .slice-progress-spinner {
+        width: 12px;
+        height: 12px;
+        border: 2px solid var(--line);
+        border-top-color: var(--brand);
+        border-radius: 50%;
+        animation: startup-spin 0.8s linear infinite;
+      }
+
+      /* Redraw choice: tick boxes before the AI redraw starts. */
+      .editable-preview-loading-dialog[data-state="choose"] .editable-preview-loading-spinner {
+        display: none;
+      }
+
+      .slice-progress-choice {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .slice-progress-choice-actions {
+        display: flex;
+        gap: 6px;
+      }
+
+      .slice-progress-toggle-all {
+        height: 24px;
+        padding: 0 10px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        color: var(--ink-2);
+        background: var(--surface-2);
+        font-size: 11px;
+        font-weight: 760;
+        cursor: pointer;
+      }
+
+      .slice-progress-item.pickable {
+        cursor: pointer;
+      }
+
+      .slice-progress-item.pickable:not(.picked) {
+        opacity: 0.6;
+      }
+
+      .slice-progress-item.pickable input {
+        width: 15px;
+        height: 15px;
+        margin: 0;
+        accent-color: var(--brand);
+        cursor: pointer;
+      }
+
+      /* Generate UI: pick one of several design options. */
+      .result-choice {
+        display: flex;
+        flex: 1 1 auto;
+        flex-direction: column;
+        gap: 12px;
+        min-height: 0;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: var(--surface);
+      }
+
+      .result-choice-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 4px 12px;
+        color: var(--ink-2);
+        font-size: 12px;
+        font-weight: 650;
+      }
+
+      .result-choice-head strong {
+        color: var(--ink);
+        font-size: 15px;
+        font-weight: 820;
+      }
+
+      .result-choice-grid {
+        display: grid;
+        flex: 1 1 auto;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+        min-height: 0;
+      }
+
+      .result-choice-option {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-height: 0;
+        margin: 0;
+      }
+
+      .result-choice-preview {
+        display: grid;
+        flex: 1 1 auto;
+        place-items: center;
+        min-height: 240px;
+        padding: 6px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--surface-2);
+        cursor: zoom-in;
+      }
+
+      .result-choice-preview img {
+        max-width: 100%;
+        max-height: min(64vh, 640px);
+        border-radius: 8px;
+        object-fit: contain;
+      }
+
+      .result-choice-option figcaption {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: var(--ink-2);
+        font-size: 12px;
+        font-weight: 760;
+      }
+
+      .result-choice-use {
+        height: 32px;
+        padding: 0 16px;
+        border: 0;
+        border-radius: 8px;
+        color: var(--on-brand);
+        background: var(--brand);
+        font-weight: 800;
+        cursor: pointer;
+      }
+
+      .result-choice-grid.has-zoomed {
+        grid-template-columns: 1fr;
+      }
+
+      .result-choice-grid.has-zoomed .result-choice-option:not(.zoomed) {
+        display: none;
+      }
+
+      .result-choice-option.zoomed .result-choice-preview {
+        cursor: zoom-out;
+      }
+
+      .result-choice-option.zoomed .result-choice-preview img {
+        max-height: calc(100vh - 220px);
       }
     </style>
   </head>
@@ -4995,6 +5262,8 @@
               <div class="model-config-dialog-body">
                 <form id="modelConfigForm" class="model-config-form">
                   <input id="modelConfigId" type="hidden" />
+                  <fieldset class="model-config-tasks model-config-source"><legend data-i18n="legend_source">Connection</legend><label><input type="radio" name="modelConfigSource" value="api" checked /><span data-i18n="source_api">API key</span></label><label><input type="radio" name="modelConfigSource" value="cli://claude" />Claude CLI</label><label><input type="radio" name="modelConfigSource" value="cli://gemini" />Gemini CLI</label><label><input type="radio" name="modelConfigSource" value="cli://codex" />Codex CLI</label></fieldset>
+                  <p id="modelConfigCliHint" class="model-config-cli-hint" hidden data-i18n="cli_hint">No API key needed. Uses the CLI already logged in on this machine. Claude and Gemini CLIs read images; Codex CLI can also generate and edit images.</p>
                   <div class="model-config-form-grid">
                     <label><span data-i18n="form_name">Note / Name (Optional)</span><input id="modelConfigName" type="text" autocomplete="off" placeholder="e.g.: Official OpenAI" data-i18n-placeholder="form_name_placeholder" /></label>
                     <label><span data-i18n="form_base_url">Base URL</span><input id="modelConfigBaseUrl" type="url" placeholder="https://api.openai.com" required /></label>
@@ -5034,8 +5303,10 @@
               <div class="cut-head-actions">
                 <button id="exportSlices" class="cut-batch" type="button" disabled data-i18n="export_slices">Export Slices</button>
                 <button id="transparentAll" class="cut-batch" type="button" disabled data-i18n="transparent_all">All Transparent</button>
+                <button id="redrawAllSlices" class="cut-batch" type="button" disabled title="Check every slice and redraw the ones that are not ready for Unity at 4x with the image model (Codex). Each slice takes about 30-100 s.">AI Redraw All</button>
                 <button id="toggleAllSlices" class="cut-batch" type="button" disabled data-i18n="toggle_all_slices_hide">Hide All</button>
                 <button id="repairPreview" class="cut-batch" type="button" disabled data-i18n="repair_preview">Preview Inpaint</button>
+                <button id="genFullBackground" class="cut-batch" type="button" disabled data-i18n="gen_full_background" title="Patch out all slices with Preview Inpaint, then crop each detected background container (no AI model needed)">Gen Full Background</button>
               </div>
             </div>
             <div id="cutGrid" class="cut-grid"></div>
@@ -5171,7 +5442,12 @@
           <strong id="backgroundDecompositionLoadingTitle" data-i18n="loading_ai_decomp">AI Slicing in Progress</strong>
           <span id="backgroundDecompositionLoadingDescription" class="editable-preview-loading-description" data-i18n="loading_ai_decomp_desc">Identifying regular slices, full background, and overlay elements…</span>
           <span id="backgroundDecompositionElapsed" class="editable-preview-elapsed">Elapsed 0s</span>
-          <button id="backgroundDecompositionLoadingCancel" class="editable-preview-cancel" type="button" data-i18n="btn_cancel">Cancel</button>
+          <ol id="backgroundDecompositionProgressList" class="slice-progress-list" aria-live="polite" hidden></ol>
+          <div class="editable-preview-loading-actions">
+            <button id="backgroundDecompositionStartRedraw" class="editable-preview-retry" type="button" hidden>AI redraw selected</button>
+            <button id="backgroundDecompositionBackground" class="editable-preview-retry" type="button" hidden>Run in background</button>
+            <button id="backgroundDecompositionLoadingCancel" class="editable-preview-cancel" type="button" data-i18n="btn_cancel">Cancel</button>
+          </div>
         </div>
       </section>
       <section id="backgroundDecompositionDialog" class="background-decomposition-dialog" aria-hidden="true" aria-modal="true" aria-labelledby="backgroundDecompositionTitle">
@@ -6692,6 +6968,7 @@ const I18N_TRANSLATIONS = {
     "toggle_all_slices_hide": "Hide All",
     "toggle_all_slices_show": "Show All",
     "repair_preview": "Preview Inpaint",
+    "gen_full_background": "Gen Full Background",
     "settings_trigger": "Settings",
     "new_work_trigger": "New Project",
     "drafts_trigger": "History",
@@ -6743,6 +7020,9 @@ const I18N_TRANSLATIONS = {
     "btn_show_key": "Show",
     "btn_hide_key": "Hide",
     "legend_purpose": "Purpose",
+    "legend_source": "Connection",
+    "source_api": "API key",
+    "cli_hint": "No API key needed. Uses the CLI already logged in on this machine. Claude and Gemini CLIs read images; Codex CLI can also generate and edit images.",
     "btn_delete": "Delete",
     "btn_test": "Test",
     "btn_save_apply": "Save & Apply",
@@ -6939,6 +7219,7 @@ const I18N_TRANSLATIONS = {
     "toggle_all_slices_hide": "Ẩn tất cả",
     "toggle_all_slices_show": "Hiện tất cả",
     "repair_preview": "Xem trước vẽ bù",
+    "gen_full_background": "Tạo nền đầy đủ",
     "settings_trigger": "Cài đặt",
     "new_work_trigger": "Bắt đầu phiên mới",
     "drafts_trigger": "Lịch sử",
@@ -6990,6 +7271,9 @@ const I18N_TRANSLATIONS = {
     "btn_show_key": "Hiện",
     "btn_hide_key": "Ẩn",
     "legend_purpose": "Dùng cho",
+    "legend_source": "Kết nối",
+    "source_api": "API key",
+    "cli_hint": "Không cần API key. Dùng CLI đã đăng nhập sẵn trên máy. Claude và Gemini CLI đọc ảnh; Codex CLI còn tạo và sửa ảnh.",
     "btn_delete": "Xóa",
     "btn_test": "Kiểm tra",
     "btn_save_apply": "Lưu & Áp dụng",
@@ -8125,6 +8409,28 @@ function hasSlicePlacementChanged(previous, next) {
   return ["x", "y", "width", "height"].some((field) => previous[field] !== next[field]);
 }
 
+// True when inner sits inside outer (within a few pixels of AI bbox slack) and is clearly smaller.
+function slicePlacementContains(outer, inner, tolerance = 4) {
+  if (!outer || !inner) return false;
+  return inner.x >= outer.x - tolerance
+    && inner.y >= outer.y - tolerance
+    && inner.x + inner.width <= outer.x + outer.width + tolerance
+    && inner.y + inner.height <= outer.y + outer.height + tolerance
+    && inner.width * inner.height < outer.width * outer.height * 0.9;
+}
+
+// Slices import bottom-to-top in array order, so a container must sit before every slice it contains.
+function placeSliceBelowContained(assets, asset) {
+  const currentIndex = assets.indexOf(asset);
+  if (currentIndex < 0) return;
+  const firstContainedIndex = assets.findIndex((other) => (
+    other !== asset && slicePlacementContains(asset.placement, other.placement)
+  ));
+  if (firstContainedIndex < 0 || firstContainedIndex > currentIndex) return;
+  assets.splice(currentIndex, 1);
+  assets.splice(firstContainedIndex, 0, asset);
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     calculateDraggedSliceRadius,
@@ -8138,8 +8444,10 @@ if (typeof module !== "undefined") {
     normalizeDraftRect,
     normalizeEditedPlacement,
     normalizeSlicePlacement,
+    placeSliceBelowContained,
     pointToScreenCoords,
-    setSliceCornerRadius
+    setSliceCornerRadius,
+    slicePlacementContains
   };
 }
 
@@ -8794,17 +9102,1016 @@ function colorDistance(r1, g1, b1, r2, g2, b2) {
   return Math.sqrt(dr * dr + dg * dg + db * db);
 }
 
+// Averaging edge pixels gives a muddy color when the subject touches the slice edge,
+// so group edge pixels by color and prefer the group that owns the corners.
+function pickEdgeBackgroundColor(pixels, width, height, tolerance = 34) {
+  const clusters = [];
+  const corners = new Set([0, width - 1, (height - 1) * width, height * width - 1]);
+  const addPixel = (pixel) => {
+    const r = pixels[pixel * 4];
+    const g = pixels[pixel * 4 + 1];
+    const b = pixels[pixel * 4 + 2];
+    let cluster = clusters.find((item) => colorDistance(r, g, b, item.r, item.g, item.b) <= tolerance);
+    if (!cluster) {
+      cluster = { r, g, b, count: 0, corners: 0, sum: { r: 0, g: 0, b: 0 } };
+      clusters.push(cluster);
+    }
+    cluster.count += 1;
+    if (corners.has(pixel)) cluster.corners += 1;
+    cluster.sum.r += r;
+    cluster.sum.g += g;
+    cluster.sum.b += b;
+  };
+  for (let x = 0; x < width; x += 1) {
+    addPixel(x);
+    if (height > 1) addPixel((height - 1) * width + x);
+  }
+  for (let y = 1; y < height - 1; y += 1) {
+    addPixel(y * width);
+    if (width > 1) addPixel(y * width + width - 1);
+  }
+  const best = clusters.reduce((winner, item) => (
+    !winner || item.corners > winner.corners || (item.corners === winner.corners && item.count > winner.count)
+      ? item
+      : winner
+  ), null);
+  return {
+    r: best.sum.r / best.count,
+    g: best.sum.g / best.count,
+    b: best.sum.b / best.count
+  };
+}
+
+// Clears the background connected to the slice edges (in place) and un-mixes the anti-aliased fringe
+// so no halo of the old background color is left around the subject.
+function removeEdgeBackgroundPixels(pixels, width, height, { hardThreshold = 34, softThreshold = 82, fringeRings = 3 } = {}) {
+  const background = pickEdgeBackgroundColor(pixels, width, height, hardThreshold);
+  const original = Uint8ClampedArray.from(pixels);
+  const total = width * height;
+  const distanceAt = (pixel) => colorDistance(
+    original[pixel * 4], original[pixel * 4 + 1], original[pixel * 4 + 2],
+    background.r, background.g, background.b
+  );
+  const neighbors = (pixel, visit) => {
+    const x = pixel % width;
+    if (x > 0) visit(pixel - 1);
+    if (x < width - 1) visit(pixel + 1);
+    if (pixel >= width) visit(pixel - width);
+    if (pixel < total - width) visit(pixel + width);
+  };
+
+  // 1 = cleared background, 2 = fringe already processed.
+  const state = new Uint8Array(total);
+  const queued = new Uint8Array(total);
+  const queue = new Int32Array(total);
+  let ring = [];
+  let head = 0;
+  let tail = 0;
+  const seed = (pixel) => {
+    if (queued[pixel]) return;
+    const distance = distanceAt(pixel);
+    if (distance >= softThreshold) return;
+    queued[pixel] = 1;
+    if (distance <= hardThreshold) queue[tail++] = pixel;
+    else ring.push(pixel);
+  };
+  for (let x = 0; x < width; x += 1) {
+    seed(x);
+    seed(total - width + x);
+  }
+  for (let y = 0; y < height; y += 1) {
+    seed(y * width);
+    seed(y * width + width - 1);
+  }
+  while (head < tail) {
+    const pixel = queue[head++];
+    state[pixel] = 1;
+    pixels[pixel * 4 + 3] = 0;
+    neighbors(pixel, seed);
+  }
+  // Opaque pixels touching the cleared area are the first fringe ring too.
+  for (let pixel = 0; pixel < total; pixel += 1) {
+    if (state[pixel] !== 1) continue;
+    neighbors(pixel, (next) => {
+      if (!state[next] && !queued[next]) {
+        queued[next] = 1;
+        ring.push(next);
+      }
+    });
+  }
+
+  for (let step = 0; step < fringeRings && ring.length; step += 1) {
+    const nextRing = [];
+    for (const pixel of ring) {
+      if (state[pixel]) continue;
+      state[pixel] = 2;
+      const alpha = estimateFringeAlpha(pixel);
+      const index = pixel * 4;
+      if (alpha <= 0.02) {
+        pixels[index + 3] = 0;
+      } else if (alpha < 0.98) {
+        for (let channel = 0; channel < 3; channel += 1) {
+          const base = [background.r, background.g, background.b][channel];
+          pixels[index + channel] = base + (original[index + channel] - base) / alpha;
+        }
+        pixels[index + 3] = Math.round(original[index + 3] * alpha);
+      }
+      if (alpha < 0.95) {
+        neighbors(pixel, (next) => {
+          if (!state[next] && !queued[next]) {
+            queued[next] = 1;
+            nextRing.push(next);
+          }
+        });
+      }
+    }
+    ring = nextRing;
+  }
+  return background;
+
+  // Alpha of a pixel blended between the background and the nearby foreground color that explains it best.
+  // A pixel no blend explains (e.g. a dark outline between a green ribbon and cream text) is its own color.
+  function estimateFringeAlpha(pixel) {
+    const x0 = pixel % width;
+    const y0 = Math.floor(pixel / width);
+    const index = pixel * 4;
+    const pr = original[index] - background.r;
+    const pg = original[index + 1] - background.g;
+    const pb = original[index + 2] - background.b;
+    const own = Math.sqrt(pr * pr + pg * pg + pb * pb);
+    let bestAlpha = null;
+    let bestResidual = hardThreshold;
+    for (let y = Math.max(0, y0 - 2); y <= Math.min(height - 1, y0 + 2); y += 1) {
+      for (let x = Math.max(0, x0 - 2); x <= Math.min(width - 1, x0 + 2); x += 1) {
+        const other = y * width + x;
+        if (state[other] === 1) continue;
+        const distance = distanceAt(other);
+        if (distance < softThreshold || distance <= own) continue;
+        const fIndex = other * 4;
+        const fr = original[fIndex] - background.r;
+        const fg = original[fIndex + 1] - background.g;
+        const fb = original[fIndex + 2] - background.b;
+        const alpha = Math.min(1, Math.max(0, (pr * fr + pg * fg + pb * fb) / (distance * distance)));
+        const residual = colorDistance(pr, pg, pb, fr * alpha, fg * alpha, fb * alpha);
+        if (residual <= bestResidual) {
+          bestResidual = residual;
+          bestAlpha = alpha;
+        }
+      }
+    }
+    if (bestAlpha !== null) return bestAlpha;
+    return Math.min(1, Math.max(0, (own - hardThreshold) / (softThreshold - hardThreshold)));
+  }
+}
+
+// Heuristic blur check for a (small) RGBA slice: soft edges have a gradient but a weak Laplacian next to it,
+// while crisp edges and smooth gradient fills do not. Callers shrink big slices to about 160 px first.
+function measureSharpness(pixels, width, height, { minPixels = 64, minEdgeGradient = 12, blurRatio = 0.35 } = {}) {
+  const luma = new Float32Array(width * height);
+  const opaque = new Uint8Array(width * height);
+  for (let i = 0; i < width * height; i += 1) {
+    const o = i * 4;
+    opaque[i] = pixels[o + 3] >= 200 ? 1 : 0;
+    luma[i] = 0.299 * pixels[o] + 0.587 * pixels[o + 1] + 0.114 * pixels[o + 2];
+  }
+  const lapHist = new Uint32Array(256);
+  const gradHist = new Uint32Array(256);
+  let count = 0;
+  let sum = 0;
+  let sumSquares = 0;
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      const i = y * width + x;
+      if (!opaque[i] || !opaque[i - 1] || !opaque[i + 1] || !opaque[i - width] || !opaque[i + width]) continue;
+      const lap = Math.abs(4 * luma[i] - luma[i - 1] - luma[i + 1] - luma[i - width] - luma[i + width]);
+      const gx = (luma[i + 1] - luma[i - 1]) / 2;
+      const gy = (luma[i + width] - luma[i - width]) / 2;
+      lapHist[Math.min(255, Math.round(lap))] += 1;
+      gradHist[Math.min(255, Math.round(Math.hypot(gx, gy)))] += 1;
+      count += 1;
+      sum += luma[i];
+      sumSquares += luma[i] * luma[i];
+    }
+  }
+  if (count < minPixels) return { count, detail: 0, edgeGradient: 0, edgeLaplacian: 0, blurry: false };
+  const percentile = (hist, share) => {
+    let seen = 0;
+    for (let value = 0; value < 256; value += 1) {
+      seen += hist[value];
+      if (seen >= count * share) return value;
+    }
+    return 255;
+  };
+  const mean = sum / count;
+  const detail = Math.sqrt(Math.max(0, sumSquares / count - mean * mean));
+  const edgeGradient = percentile(gradHist, 0.995);
+  const edgeLaplacian = percentile(lapHist, 0.995);
+  return {
+    count,
+    detail,
+    edgeGradient,
+    edgeLaplacian,
+    blurry: edgeGradient >= minEdgeGradient && edgeLaplacian / edgeGradient < blurRatio
+  };
+}
+
+// Hand-off check an artist would do before giving a slice to a developer (Figma, then Unity): enough resolution,
+// no stray specks or haze, no halo of the old background, not cut off by the slice box. `scale` is the slice's pixel
+// width divided by its on-screen width (4 after an AI upscale). Returns { status: "ready" | "check" | "fix", issues }.
+// `outsideColors` ([r, g, b] seen around the slice in the original image) find edges made of leftover background.
+// Small elements (short side under `smallSide` on screen) need `minScale` times their size in pixels to stay crisp.
+// `recreated` (drawn by the model on a key color and fitted to the box): no old background can be left and the
+// content touches the box by design, so those two checks are skipped.
+function assessSliceHandoff(pixels, width, height, { scale = 1, minScale = 2, smallSide = 160, screenShortSide = Infinity, blurry = false, outsideColors = [], recreated = false } = {}) {
+  const issues = [];
+  const add = (code, severity, message) => issues.push({ code, severity, message });
+  const total = width * height;
+  const label = new Int32Array(total).fill(-1);
+  const sizes = [];
+  const stack = [];
+  let partial = 0;
+  let visible = 0;
+  for (let start = 0; start < total; start += 1) {
+    const alpha = pixels[start * 4 + 3];
+    if (alpha > 0) visible += 1;
+    if (alpha > 16 && alpha < 240) partial += 1;
+    if (label[start] !== -1 || alpha < 32) continue;
+    const id = sizes.length;
+    let size = 0;
+    label[start] = id;
+    stack.push(start);
+    while (stack.length) {
+      const index = stack.pop();
+      size += 1;
+      const x = index % width;
+      const y = (index - x) / width;
+      for (let dy = -1; dy <= 1; dy += 1) {
+        for (let dx = -1; dx <= 1; dx += 1) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+          const next = ny * width + nx;
+          if (label[next] !== -1 || pixels[next * 4 + 3] < 32) continue;
+          label[next] = id;
+          stack.push(next);
+        }
+      }
+    }
+    sizes.push(size);
+  }
+  if (!sizes.length) {
+    add("empty", "fix", "Nothing visible in the slice");
+    return { status: "fix", issues };
+  }
+  if (scale < minScale && screenShortSide < smallSide) {
+    add("low-resolution", "fix", `Only ${Math.round(scale * 10) / 10}x resolution; a small element this size looks rough in Unity (needs ${minScale}x or more)`);
+  }
+  if (blurry) add("blurry", "fix", "Soft or blurry edges");
+  const largest = Math.max(...sizes);
+  const specks = sizes.filter((size) => size < Math.max(6, largest * 0.004)).length;
+  if (specks > 0) add("specks", "fix", `${specks} stray speck${specks > 1 ? "s" : ""} around the asset`);
+  if (visible > 0 && partial / visible > 0.3) add("haze", "check", "Many semi-transparent pixels: edges look dirty or hazy");
+
+  // Halo: outer edge pixels much lighter than the pixel two steps inside (a rim of the old light background).
+  let edgePixels = 0;
+  let lightEdges = 0;
+  let backgroundEdges = 0;
+  const looksLikeOutside = (index) => outsideColors.some(([r, g, b]) => colorDistance(pixels[index * 4], pixels[index * 4 + 1], pixels[index * 4 + 2], r, g, b) < 36);
+  const luma = (index) => 0.299 * pixels[index * 4] + 0.587 * pixels[index * 4 + 1] + 0.114 * pixels[index * 4 + 2];
+  const opaque = (x, y) => x >= 0 && y >= 0 && x < width && y < height && pixels[(y * width + x) * 4 + 3] >= 128;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (!opaque(x, y)) continue;
+      const directions = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => !opaque(x + dx, y + dy));
+      if (!directions.length) continue;
+      edgePixels += 1;
+      if (outsideColors.length && looksLikeOutside(y * width + x)) backgroundEdges += 1;
+      const [dx, dy] = directions[0];
+      const ix = x - dx * 2;
+      const iy = y - dy * 2;
+      if (opaque(ix, iy) && luma(y * width + x) - luma(iy * width + ix) > 70) lightEdges += 1;
+    }
+  }
+  if (!recreated && edgePixels >= 20 && backgroundEdges / edgePixels > 0.2) add("leftover-background", "fix", "Edges still carry the background color from around the slice");
+  if (edgePixels >= 20 && lightEdges / edgePixels > 0.25) add("halo", "check", "Light halo around the edges (may be leftover background, or a real light outline)");
+
+  // Cut off: long runs of opaque pixels on the slice border.
+  const sides = [
+    [width, (i) => [i, 0]], [width, (i) => [i, height - 1]], [height, (i) => [0, i]], [height, (i) => [width - 1, i]]
+  ].filter(([length, at]) => {
+    let run = 0;
+    for (let i = 0; i < length; i += 1) if (opaque(...at(i))) run += 1;
+    return run / length > 0.35;
+  }).length;
+  if (!recreated && sides >= 2) add("edge-cut", "check", "Touches the slice border on several sides; it may be cut off");
+
+  const status = issues.some((issue) => issue.severity === "fix") ? "fix" : issues.length ? "check" : "ready";
+  return { status, issues };
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
+    assessSliceHandoff,
     averageBackgroundColors,
     averageColors,
     colorDistance,
     getPixelColor,
+    measureSharpness,
     mixColors,
+    pickEdgeBackgroundColor,
+    removeEdgeBackgroundPixels,
     rgbToHex,
     sampleEdgeColor,
     sampleEdgeStats,
     toRgb
+  };
+}
+
+const {
+  colorDistance: layerIsolationColorDistance,
+  pickEdgeBackgroundColor: layerIsolationPickEdgeColor,
+  removeEdgeBackgroundPixels: layerIsolationRemoveEdgeBackground
+} = typeof require === "function" ? require("./image-color-utils") : {
+  colorDistance,
+  pickEdgeBackgroundColor,
+  removeEdgeBackgroundPixels
+};
+
+const BACKGROUND_TOLERANCE = 34;
+
+// How far a color may be from the background around a layer and still count as background: tight on a flat or
+// smooth background (a panel's slightly darker inset is about 30 apart), looser on a noisy or textured one.
+function layerBackgroundTolerance(source, sourceWidth, sourceHeight, placement, covered) {
+  let total = 0;
+  let count = 0;
+  let previous = null;
+  const step = (x, y) => {
+    if (x < 0 || y < 0 || x >= sourceWidth || y >= sourceHeight || covered[y * sourceWidth + x]) {
+      previous = null;
+      return;
+    }
+    const index = (y * sourceWidth + x) * 4;
+    if (previous !== null) {
+      total += layerIsolationColorDistance(
+        source[index], source[index + 1], source[index + 2],
+        source[previous], source[previous + 1], source[previous + 2]
+      );
+      count += 1;
+    }
+    previous = index;
+  };
+  const { x: left, y: top, width, height } = placement;
+  for (let x = left - 2; x <= left + width + 1; x += 1) step(x, top - 2);
+  for (let y = top - 2; y <= top + height + 1; y += 1) step(left + width + 1, y);
+  for (let x = left + width + 1; x >= left - 2; x -= 1) step(x, top + height + 1);
+  for (let y = top + height + 1; y >= top - 2; y -= 1) step(left - 2, y);
+  const noise = count ? total / count : 0;
+  return Math.min(BACKGROUND_TOLERANCE, 20 + noise * 2);
+}
+
+// Color tolerance around a background color: dark colors (a dimmed scene behind a popup) differ by less,
+// so the same distance that separates bright colors would swallow dark elements.
+function backgroundTolerance(color, tolerance = BACKGROUND_TOLERANCE) {
+  const luma = 0.299 * color.r + 0.587 * color.g + 0.114 * color.b;
+  // The tighter of the given tolerance and the darkness limit, so a tight flat-background tolerance is not cut again.
+  return Math.min(tolerance, BACKGROUND_TOLERANCE * Math.min(1, Math.max(0.5, (luma + 20) / 110)));
+}
+
+// Separates overlapping AI slices. `layers` are { placement, shape, kind } in paint order (back to front).
+// Layers are processed front to back: what the layers in front cover is inpainted from the layer's own pixels,
+// then the screen background and the layers behind it are cleared, and round shapes get a soft mask.
+
+// Coverage (0..1) of a layer's shape at a source pixel; free shapes cover their whole box. `inset` shrinks the shape.
+function sliceShapeCoverage(layer, x, y, inset = 0) {
+  const left = layer.placement.x + inset;
+  const top = layer.placement.y + inset;
+  const width = layer.placement.width - inset * 2;
+  const height = layer.placement.height - inset * 2;
+  const px = x + 0.5 - left;
+  const py = y + 0.5 - top;
+  if (width <= 0 || height <= 0 || px < 0 || py < 0 || px > width || py > height) return 0;
+  if (layer.shape === "ellipse") {
+    const rx = width / 2;
+    const ry = height / 2;
+    const distance = Math.hypot((px - rx) / rx, (py - ry) / ry);
+    // About one pixel of anti-aliasing on the edge.
+    return Math.min(1, Math.max(0, (1 - distance) * Math.min(rx, ry) + 0.5));
+  }
+  if (layer.shape === "capsule") {
+    const radius = Math.min(width, height) / 2;
+    const cx = Math.min(Math.max(px, radius), width - radius);
+    const cy = Math.min(Math.max(py, radius), height - radius);
+    return Math.min(1, Math.max(0, radius - Math.hypot(px - cx, py - cy) + 0.5));
+  }
+  return 1;
+}
+
+function overlapArea(a, b) {
+  const width = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+  const height = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+  return width > 0 && height > 0 ? width * height : 0;
+}
+
+// Letter holes (inside an "o") and gaps between letters are not connected to the box edge, so the edge fill
+// misses them. Visible pixels whose color matches the background seen outside the box on the same row are
+// cleared wherever they are; a text outline is a different color from that background, so it stays.
+function clearTextHoles(pixels, crop, width, height, lineColors, state, tolerance = 20) {
+  for (let y = 0; y < height; y += 1) {
+    const colors = lineColors.rows[y].filter(Boolean);
+    if (!colors.length) continue;
+    for (let x = 0; x < width; x += 1) {
+      const pixel = y * width + x;
+      const index = pixel * 4;
+      if (pixels[index + 3] === 0 || state[pixel] === 1) continue;
+      if (colors.some((color) => layerIsolationColorDistance(
+        crop[index], crop[index + 1], crop[index + 2], color.r, color.g, color.b
+      ) <= backgroundTolerance(color, tolerance))) pixels[index + 3] = 0;
+    }
+  }
+}
+
+// Clears the outer band (rim and highlight) of a round button that shows inside an icon's box, by filling from
+// the box edges through pixels in that band; the icon itself sits well inside the button and is not reached.
+function clearRoundRimFromEdges(pixels, width, height, layer, round, state, band = 0.8) {
+  const { x: left, y: top } = layer.placement;
+  const rx = round.placement.width / 2;
+  const ry = round.placement.height / 2;
+  const cx = round.placement.x + rx;
+  const cy = round.placement.y + ry;
+  const inRim = (pixel) => {
+    const x = pixel % width;
+    const y = (pixel - x) / width;
+    return Math.hypot((left + x + 0.5 - cx) / rx, (top + y + 0.5 - cy) / ry) >= band;
+  };
+  const total = width * height;
+  const seen = new Uint8Array(total);
+  const queue = new Int32Array(total);
+  let tail = 0;
+  const visit = (pixel) => {
+    if (seen[pixel] || state[pixel] === 1 || !inRim(pixel)) return;
+    seen[pixel] = 1;
+    pixels[pixel * 4 + 3] = 0;
+    queue[tail++] = pixel;
+  };
+  for (let x = 0; x < width; x += 1) {
+    visit(x);
+    visit(total - width + x);
+  }
+  for (let y = 0; y < height; y += 1) {
+    visit(y * width);
+    visit(y * width + width - 1);
+  }
+  for (let head = 0; head < tail; head += 1) {
+    const pixel = queue[head];
+    const x = pixel % width;
+    if (x > 0) visit(pixel - 1);
+    if (x < width - 1) visit(pixel + 1);
+    if (pixel >= width) visit(pixel - width);
+    if (pixel < total - width) visit(pixel + width);
+  }
+}
+
+function boxesIntersect(a, b) {
+  return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+}
+
+function cropSourcePixels(source, sourceWidth, { x: left, y: top, width, height }) {
+  const pixels = new Uint8ClampedArray(width * height * 4);
+  for (let y = 0; y < height; y += 1) {
+    const from = ((top + y) * sourceWidth + left) * 4;
+    pixels.set(source.subarray(from, from + width * 4), y * width * 4);
+  }
+  return pixels;
+}
+
+// Fills pixels with state 1 from known pixels (state 0) in premultiplied RGBA, so a hidden part can also
+// resolve to transparent background; state 2 is neither used nor filled. Holes spanned by known pixels on both
+// sides of a row or column are interpolated (the shorter gap weighing more), so borders and bars continue
+// straight through. A span whose two ends differ (panel color above, a button's shadow below) weighs much less
+// than one whose ends agree, so the shadow is not smeared into the hole. The rest is filled from neighbors one
+// ring at a time.
+function inpaintUnknownPixels(pixels, width, height, state) {
+  const premultiplied = (pixel, channel) => (
+    channel === 3 ? pixels[pixel * 4 + 3] : pixels[pixel * 4 + channel] * pixels[pixel * 4 + 3] / 255
+  );
+  const write = (pixel, values, total) => {
+    const alpha = values[3] / total;
+    for (let channel = 0; channel < 3; channel += 1) {
+      pixels[pixel * 4 + channel] = alpha > 0 ? (values[channel] / total) * 255 / alpha : 0;
+    }
+    // A hidden part is either the layer or background; half-transparent fill reads as a smudge.
+    pixels[pixel * 4 + 3] = alpha >= 128 ? 255 : 0;
+    state[pixel] = 0;
+  };
+  const sums = new Float32Array(width * height * 5);
+  const addSpans = (count, length, indexAt) => {
+    for (let line = 0; line < count; line += 1) {
+      let from = -1;
+      for (let to = 0; to < length; to += 1) {
+        if (state[indexAt(line, to)] !== 0) continue;
+        const gap = to - from - 1;
+        if (from >= 0 && gap > 0) {
+          const a = indexAt(line, from) * 4;
+          const b = indexAt(line, to) * 4;
+          const endsApart = layerIsolationColorDistance(pixels[a], pixels[a + 1], pixels[a + 2], pixels[b], pixels[b + 1], pixels[b + 2])
+            + Math.abs(pixels[a + 3] - pixels[b + 3]);
+          const weight = Math.exp(-endsApart / 20) / gap;
+          for (let hole = from + 1; hole < to; hole += 1) {
+            const target = indexAt(line, hole);
+            if (state[target] !== 1) continue;
+            const amount = (hole - from) / (to - from);
+            for (let channel = 0; channel < 4; channel += 1) {
+              const start = premultiplied(indexAt(line, from), channel);
+              const value = start + (premultiplied(indexAt(line, to), channel) - start) * amount;
+              sums[target * 5 + channel] += value * weight;
+            }
+            sums[target * 5 + 4] += weight;
+          }
+        }
+        from = to;
+      }
+    }
+  };
+  addSpans(height, width, (y, x) => y * width + x);
+  addSpans(width, height, (x, y) => y * width + x);
+  for (let pixel = 0; pixel < state.length; pixel += 1) {
+    if (state[pixel] === 1 && sums[pixel * 5 + 4]) write(pixel, sums.subarray(pixel * 5, pixel * 5 + 4), sums[pixel * 5 + 4]);
+  }
+  for (;;) {
+    const filled = [];
+    for (let pixel = 0; pixel < state.length; pixel += 1) {
+      if (state[pixel] !== 1) continue;
+      const x = pixel % width;
+      const y = (pixel - x) / width;
+      const values = [0, 0, 0, 0];
+      let count = 0;
+      for (let ny = Math.max(0, y - 1); ny <= Math.min(height - 1, y + 1); ny += 1) {
+        for (let nx = Math.max(0, x - 1); nx <= Math.min(width - 1, x + 1); nx += 1) {
+          const neighbor = ny * width + nx;
+          if (state[neighbor] !== 0) continue;
+          for (let channel = 0; channel < 4; channel += 1) values[channel] += premultiplied(neighbor, channel);
+          count += 1;
+        }
+      }
+      if (count) filled.push([pixel, values, count]);
+    }
+    if (filled.length === 0) return;
+    for (const [pixel, values, count] of filled) write(pixel, values, count);
+  }
+}
+
+// Game UI elements are mostly left/right symmetric and round ones are built from rings, so a hidden pixel first
+// copies its mirror image across the vertical axis, then (for ellipses) the nearest visible pixel on its ring.
+function fillHiddenFromSymmetry(pixels, width, height, state, shape) {
+  const copy = (pixel, from) => {
+    pixels.set(pixels.subarray(from * 4, from * 4 + 4), pixel * 4);
+    state[pixel] = 0;
+  };
+  const hidden = [];
+  for (let pixel = 0; pixel < state.length; pixel += 1) if (state[pixel] === 1) hidden.push(pixel);
+  const ringHidden = [];
+  for (const pixel of hidden) {
+    const x = pixel % width;
+    const mirror = pixel - x + (width - 1 - x);
+    if (state[mirror] === 0) copy(pixel, mirror);
+    else if (shape === "ellipse") ringHidden.push(pixel);
+  }
+  const rx = width / 2;
+  const ry = height / 2;
+  const step = Math.PI / 180;
+  for (const pixel of ringHidden) {
+    if (state[pixel] !== 1) continue;
+    const x = pixel % width;
+    const u = (x + 0.5 - rx) / rx;
+    const v = ((pixel - x) / width + 0.5 - ry) / ry;
+    const radius = Math.hypot(u, v);
+    const angle = Math.atan2(v, u);
+    for (let turn = 1; turn <= 180; turn += 1) {
+      const found = [angle + turn * step, angle - turn * step].map((candidate) => {
+        const sx = Math.floor(rx + Math.cos(candidate) * radius * rx);
+        const sy = Math.floor(ry + Math.sin(candidate) * radius * ry);
+        return sx >= 0 && sy >= 0 && sx < width && sy < height && state[sy * width + sx] === 0 ? sy * width + sx : -1;
+      }).find((from) => from >= 0);
+      if (found !== undefined) {
+        copy(pixel, found);
+        break;
+      }
+    }
+  }
+}
+
+// Colors seen just outside the box that are not covered by layers in front: the background and the layers behind.
+function collectOutsideColors(source, sourceWidth, sourceHeight, placement, covered, ignored, band = 3, tolerance = BACKGROUND_TOLERANCE) {
+  const clusters = [];
+  let total = 0;
+  const add = (x, y) => {
+    if (x < 0 || y < 0 || x >= sourceWidth || y >= sourceHeight) return;
+    const pixel = y * sourceWidth + x;
+    if (covered[pixel] || ignored(x, y)) return;
+    const r = source[pixel * 4];
+    const g = source[pixel * 4 + 1];
+    const b = source[pixel * 4 + 2];
+    total += 1;
+    const cluster = clusters.find((item) => layerIsolationColorDistance(r, g, b, item.r, item.g, item.b) <= tolerance);
+    if (!cluster) {
+      clusters.push({ r, g, b, count: 1, sum: [r, g, b] });
+      return;
+    }
+    // Keep the cluster at its mean color, not at the first pixel that started it.
+    cluster.count += 1;
+    cluster.sum[0] += r;
+    cluster.sum[1] += g;
+    cluster.sum[2] += b;
+    cluster.r = cluster.sum[0] / cluster.count;
+    cluster.g = cluster.sum[1] / cluster.count;
+    cluster.b = cluster.sum[2] / cluster.count;
+  };
+  const { x: left, y: top, width, height } = placement;
+  for (let offset = 1; offset <= band; offset += 1) {
+    for (let x = left - offset; x < left + width + offset; x += 1) {
+      add(x, top - offset);
+      add(x, top + height - 1 + offset);
+    }
+    for (let y = top - offset + 1; y < top + height + offset - 1; y += 1) {
+      add(left - offset, y);
+      add(left + width - 1 + offset, y);
+    }
+  }
+  return clusters.filter((cluster) => cluster.count >= total * 0.05);
+}
+
+// Color just outside the box at each row (left, right) and column (top, bottom), or null where covered or off-screen,
+// so a gradient background is matched by the color it has at that height or column.
+function collectLineOutsideColors(source, sourceWidth, sourceHeight, placement, covered, ignored, offset = 2) {
+  const at = (x, y) => {
+    if (x < 0 || y < 0 || x >= sourceWidth || y >= sourceHeight || covered[y * sourceWidth + x] || ignored(x, y)) return null;
+    const index = (y * sourceWidth + x) * 4;
+    return { r: source[index], g: source[index + 1], b: source[index + 2] };
+  };
+  const { x: left, y: top, width, height } = placement;
+  return {
+    rows: Array.from({ length: height }, (_, y) => [at(left - offset, top + y), at(left + width - 1 + offset, top + y)]),
+    columns: Array.from({ length: width }, (_, x) => [at(left + x, top - offset), at(left + x, top + height - 1 + offset)])
+  };
+}
+
+// Clears pixels connected to the crop edges whose original color (`crop`, before earlier passes un-mixed fringes)
+// matches one of `colors` or the outside color on their own row or column (`lineColors`), except protected ones.
+// Pixels hidden by layers in front (`state` 1) are rebuilt later, so the fill also starts from them and passes
+// through them: background seen around a front layer is reached too. Elsewhere the fill only steps between similar
+// colors, starting from an edge pixel only where its color goes on well outside the box (`farLineColors`): a text
+// outline cut by the box edge, or one that shares the color of a ribbon border behind it, is not background.
+function clearEdgeConnectedColors(pixels, crop, width, height, colors, lineColors, farLineColors, protect, state, tolerance = BACKGROUND_TOLERANCE) {
+  const total = width * height;
+  const seen = new Uint8Array(total);
+  const queue = new Int32Array(total);
+  let head = 0;
+  let tail = 0;
+  const cropColor = (pixel) => ({ r: crop[pixel * 4], g: crop[pixel * 4 + 1], b: crop[pixel * 4 + 2] });
+  // `previous` is the color the fill comes from; null (hidden pixels, edges off-screen or covered) allows any,
+  // false allows only pixels that are already transparent or hidden.
+  const visit = (pixel, previous) => {
+    if (seen[pixel] || protect[pixel]) return;
+    const index = pixel * 4;
+    const x = pixel % width;
+    const matches = (color) => color && layerIsolationColorDistance(
+      crop[index], crop[index + 1], crop[index + 2], color.r, color.g, color.b
+    ) <= backgroundTolerance(color, tolerance);
+    const clear = pixels[index + 3] === 0
+      || state[pixel] === 1
+      || (previous !== false && (!previous || matches(previous)) && (
+        colors.some(matches)
+        || lineColors.rows[(pixel - x) / width].some(matches)
+        || lineColors.columns[x].some(matches)
+      ));
+    // Not marked seen when blocked: a pixel of the same color, or another edge, may still reach it.
+    if (!clear) return;
+    seen[pixel] = 1;
+    pixels[index + 3] = 0;
+    queue[tail++] = pixel;
+  };
+  const edge = (near, far) => (
+    !near || !far || layerIsolationColorDistance(near.r, near.g, near.b, far.r, far.g, far.b) <= backgroundTolerance(near, tolerance)
+      ? near
+      : false
+  );
+  for (let x = 0; x < width; x += 1) {
+    visit(x, edge(lineColors.columns[x][0], farLineColors.columns[x][0]));
+    visit(total - width + x, edge(lineColors.columns[x][1], farLineColors.columns[x][1]));
+  }
+  for (let y = 0; y < height; y += 1) {
+    visit(y * width, edge(lineColors.rows[y][0], farLineColors.rows[y][0]));
+    visit(y * width + width - 1, edge(lineColors.rows[y][1], farLineColors.rows[y][1]));
+  }
+  for (let pixel = 0; pixel < total; pixel += 1) if (state[pixel] === 1) visit(pixel, null);
+  while (head < tail) {
+    const pixel = queue[head++];
+    const x = pixel % width;
+    const previous = state[pixel] === 1 ? null : cropColor(pixel);
+    if (x > 0) visit(pixel - 1, previous);
+    if (x < width - 1) visit(pixel + 1, previous);
+    if (pixel >= width) visit(pixel - width, previous);
+    if (pixel < total - width) visit(pixel + width, previous);
+  }
+}
+
+// Distinct colors (merged within `tolerance`) among sampled pixels.
+function buildPalette(samples, tolerance = 10, limit = 400) {
+  const palette = [];
+  for (const color of samples) {
+    if (palette.some((item) => layerIsolationColorDistance(color.r, color.g, color.b, item.r, item.g, item.b) <= tolerance)) continue;
+    palette.push(color);
+    if (palette.length >= limit) break;
+  }
+  return palette;
+}
+
+function nearestPaletteDistance(palette, r, g, b) {
+  let best = Infinity;
+  for (const item of palette) best = Math.min(best, layerIsolationColorDistance(r, g, b, item.r, item.g, item.b));
+  return best;
+}
+
+// A textured background (yarn, scenery) has many shades, so one tolerance misses some. Pixels connected to the box
+// edge are cleared when their color is nearer to the colors seen around the box than to those in the layer's core.
+function clearTexturedBackground(pixels, crop, width, height, source, sourceWidth, sourceHeight, placement, covered, ignored, state) {
+  const outside = [];
+  const { x: left, y: top } = placement;
+  // A few pixels away from the box, so a border the AI box cut a little short is not taken for background.
+  for (let offset = 6; offset <= 10; offset += 1) {
+    const ring = [];
+    for (let x = left - offset; x < left + width + offset; x += 1) ring.push([x, top - offset], [x, top + height - 1 + offset]);
+    for (let y = top - offset; y < top + height + offset; y += 1) ring.push([left - offset, y], [left + width - 1 + offset, y]);
+    for (const [x, y] of ring) {
+      if (x < 0 || y < 0 || x >= sourceWidth || y >= sourceHeight || covered[y * sourceWidth + x] || ignored(x, y)) continue;
+      const index = (y * sourceWidth + x) * 4;
+      outside.push({ r: source[index], g: source[index + 1], b: source[index + 2] });
+    }
+  }
+  const core = [];
+  const insetX = Math.floor(width * 0.2);
+  const insetY = Math.floor(height * 0.2);
+  for (let y = insetY; y < height - insetY; y += 2) {
+    for (let x = insetX; x < width - insetX; x += 2) {
+      const pixel = y * width + x;
+      if (state[pixel] === 1) continue;
+      core.push({ r: crop[pixel * 4], g: crop[pixel * 4 + 1], b: crop[pixel * 4 + 2] });
+    }
+  }
+  if (outside.length < 8 || core.length < 8) return;
+  const background = buildPalette(outside);
+  const foreground = buildPalette(core);
+  const isBackground = (pixel) => {
+    const index = pixel * 4;
+    const r = crop[index];
+    const g = crop[index + 1];
+    const b = crop[index + 2];
+    const toBackground = nearestPaletteDistance(background, r, g, b);
+    return toBackground <= 12 && nearestPaletteDistance(foreground, r, g, b) > toBackground + 25;
+  };
+  const total = width * height;
+  const seen = new Uint8Array(total);
+  const queue = new Int32Array(total);
+  let tail = 0;
+  const visit = (pixel) => {
+    if (seen[pixel]) return;
+    seen[pixel] = 1;
+    if (pixels[pixel * 4 + 3] !== 0 && state[pixel] !== 1 && !isBackground(pixel)) return;
+    pixels[pixel * 4 + 3] = 0;
+    queue[tail++] = pixel;
+  };
+  for (let x = 0; x < width; x += 1) {
+    visit(x);
+    visit(total - width + x);
+  }
+  for (let y = 0; y < height; y += 1) {
+    visit(y * width);
+    visit(y * width + width - 1);
+  }
+  for (let head = 0; head < tail; head += 1) {
+    const pixel = queue[head];
+    const x = pixel % width;
+    if (x > 0) visit(pixel - 1);
+    if (x < width - 1) visit(pixel + 1);
+    if (pixel >= width) visit(pixel - width);
+    if (pixel < total - width) visit(pixel + width);
+  }
+}
+
+// Clears visible islands smaller than 1% of the largest one: leftovers of the background (a dim tile number,
+// specks of a shadow) rather than parts of the layer. Text is skipped because its glyphs are islands.
+function clearSmallIslands(pixels, width, height) {
+  const total = width * height;
+  const label = new Int32Array(total).fill(-1);
+  const sizes = [];
+  const queue = new Int32Array(total);
+  for (let start = 0; start < total; start += 1) {
+    if (label[start] >= 0 || pixels[start * 4 + 3] === 0) continue;
+    const id = sizes.length;
+    let head = 0;
+    let tail = 0;
+    label[start] = id;
+    queue[tail++] = start;
+    while (head < tail) {
+      const pixel = queue[head++];
+      const x = pixel % width;
+      for (const next of [x > 0 ? pixel - 1 : -1, x < width - 1 ? pixel + 1 : -1, pixel - width, pixel + width]) {
+        if (next < 0 || next >= total || label[next] >= 0 || pixels[next * 4 + 3] === 0) continue;
+        label[next] = id;
+        queue[tail++] = next;
+      }
+    }
+    sizes.push(tail);
+  }
+  const minimum = Math.max(...sizes, 0) * 0.01;
+  for (let pixel = 0; pixel < total; pixel += 1) {
+    if (label[pixel] >= 0 && sizes[label[pixel]] < minimum) pixels[pixel * 4 + 3] = 0;
+  }
+}
+
+// Returns, per layer, the opaque crop with front layers inpainted out (`opaque`), the transparent result (`pixels`)
+// and whether nothing but background is left (`backgroundOnly`).
+function isolateSliceLayers(source, sourceWidth, sourceHeight, layers) {
+  const covered = new Uint8Array(sourceWidth * sourceHeight);
+  const results = new Array(layers.length);
+  for (let index = layers.length - 1; index >= 0; index -= 1) {
+    const layer = layers[index];
+    const { x: left, y: top, width, height } = layer.placement;
+    const crop = cropSourcePixels(source, sourceWidth, layer.placement);
+    const round = layer.shape === "ellipse" || layer.shape === "capsule";
+    // 0 = known, 1 = covered by a layer in front (dilated by 2px), 2 = outside the shape.
+    const state = new Uint8Array(width * height);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        if (round && sliceShapeCoverage(layer, left + x, top + y) < 0.5) {
+          state[y * width + x] = 2;
+          continue;
+        }
+        search: for (let sy = Math.max(0, top + y - 2); sy <= Math.min(sourceHeight - 1, top + y + 2); sy += 1) {
+          for (let sx = Math.max(0, left + x - 2); sx <= Math.min(sourceWidth - 1, left + x + 2); sx += 1) {
+            if (covered[sy * sourceWidth + sx]) {
+              state[y * width + x] = 1;
+              break search;
+            }
+          }
+        }
+      }
+    }
+    // The opaque version (used when transparency is turned off) has the hidden parts filled with color only.
+    const opaque = Uint8ClampedArray.from(crop);
+    const opaqueState = Uint8Array.from(state);
+    fillHiddenFromSymmetry(opaque, width, height, opaqueState, layer.shape);
+    inpaintUnknownPixels(opaque, width, height, opaqueState);
+
+    const pixels = Uint8ClampedArray.from(crop);
+    // The core of a round shape is never background, even when its colors are close to it.
+    const protect = new Uint8Array(width * height);
+    if (round) {
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+          if (sliceShapeCoverage(layer, left + x, top + y, 4) >= 1) protect[y * width + x] = 1;
+        }
+      }
+    }
+    // A layer behind that only sits next to this one (a neighbouring tile of the same color) is not its background.
+    const neighbours = layers.slice(0, index)
+      .map((other) => other.placement)
+      .filter((box) => !boxesIntersect(box, layer.placement));
+    const ignored = (x, y) => neighbours.some((box) => (
+      x >= box.x && y >= box.y && x < box.x + box.width && y < box.y + box.height
+    ));
+    const outsideColors = collectOutsideColors(source, sourceWidth, sourceHeight, layer.placement, covered, ignored);
+    const tolerance = layerBackgroundTolerance(source, sourceWidth, sourceHeight, layer.placement, covered);
+    const scale = backgroundTolerance(layerIsolationPickEdgeColor(pixels, width, height), tolerance) / 34;
+    const edgeColor = layerIsolationRemoveEdgeBackground(pixels, width, height, {
+      hardThreshold: 34 * scale,
+      softThreshold: 82 * scale
+    });
+    // The corner color is only background when it also shows outside the box; a panel's corners are the panel.
+    const edgeColorIsOutside = outsideColors.some((color) => (
+      layerIsolationColorDistance(edgeColor.r, edgeColor.g, edgeColor.b, color.r, color.g, color.b) <= backgroundTolerance(color, tolerance)
+    ));
+    for (let pixel = 0; pixel < protect.length; pixel += 1) {
+      if (protect[pixel] || !edgeColorIsOutside) pixels.set(crop.subarray(pixel * 4, pixel * 4 + 4), pixel * 4);
+    }
+    const lineColors = collectLineOutsideColors(source, sourceWidth, sourceHeight, layer.placement, covered, ignored);
+    // An icon drawn on a round button: the button's rim inside the icon's box belongs to the button. Only for
+    // boxes centred on the button, not a tag or label lying across its lower edge.
+    const insideRound = layers.slice(0, index).find((other) => {
+      if (other.shape !== "ellipse" || overlapArea(other.placement, layer.placement) < width * height * 0.8) return false;
+      const rx = other.placement.width / 2;
+      const ry = other.placement.height / 2;
+      return Math.hypot(
+        (left + width / 2 - other.placement.x - rx) / rx,
+        (top + height / 2 - other.placement.y - ry) / ry
+      ) < 0.5;
+    });
+    clearEdgeConnectedColors(
+      pixels, crop, width, height, outsideColors,
+      lineColors,
+      // The far-color check guards text outlines cut by the box edge; other layers clear a textured background too.
+      layer.kind === "text"
+        ? collectLineOutsideColors(source, sourceWidth, sourceHeight, layer.placement, covered, ignored, 12)
+        : lineColors,
+      protect,
+      state,
+      tolerance
+    );
+    if (layer.kind !== "text") {
+      clearTexturedBackground(pixels, crop, width, height, source, sourceWidth, sourceHeight, layer.placement, covered, ignored, state);
+    }
+    // A panel that fills its whole box looks like background to the flood fill; keep it opaque instead.
+    // Only visible pixels count: hidden ones are always cleared before they are rebuilt.
+    let cleared = 0;
+    let shown = 0;
+    for (let pixel = 0; pixel < protect.length; pixel += 1) {
+      if (state[pixel] === 1) continue;
+      shown += 1;
+      if (pixels[pixel * 4 + 3] === 0) cleared += 1;
+    }
+    // A box around several other layers that comes out empty is a group box and is dropped later; any other layer
+    // the AI saw but that looks like the background (a faded bar) keeps its plain crop.
+    const enclosed = layers.slice(index + 1).filter((other) => (
+      other.placement.x >= left && other.placement.y >= top
+      && other.placement.x + other.placement.width <= left + width
+      && other.placement.y + other.placement.height <= top + height
+    )).length;
+    if (layer.kind !== "text" && (
+      (!edgeColorIsOutside && cleared > shown * 0.8) || (enclosed < 2 && cleared > shown * 0.97)
+    )) pixels.set(crop);
+    // Hidden parts are filled after the background is gone, so they can turn out transparent too.
+    const hidden = state.map((value) => (value === 1 ? 1 : 0));
+    fillHiddenFromSymmetry(pixels, width, height, state, layer.shape);
+    inpaintUnknownPixels(pixels, width, height, state);
+    if (layer.kind === "text") clearTextHoles(pixels, crop, width, height, lineColors, state);
+    else clearSmallIslands(pixels, width, height);
+    if (insideRound) clearRoundRimFromEdges(pixels, width, height, layer, insideRound, state);
+    if (round) {
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+          const alphaIndex = (y * width + x) * 4 + 3;
+          pixels[alphaIndex] = Math.round(pixels[alphaIndex] * sliceShapeCoverage(layer, left + x, top + y));
+        }
+      }
+    }
+    let visible = 0;
+    let rebuilt = 0;
+    const rebuiltBox = { left: width, top: height, right: -1, bottom: -1 };
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const alpha = pixels[(y * width + x) * 4 + 3];
+        if (alpha === 0) continue;
+        covered[(top + y) * sourceWidth + left + x] = 1;
+        if (alpha < 128) continue;
+        visible += 1;
+        if (!hidden[y * width + x]) continue;
+        rebuilt += 1;
+        rebuiltBox.left = Math.min(rebuiltBox.left, x);
+        rebuiltBox.top = Math.min(rebuiltBox.top, y);
+        rebuiltBox.right = Math.max(rebuiltBox.right, x);
+        rebuiltBox.bottom = Math.max(rebuiltBox.bottom, y);
+      }
+    }
+    results[index] = {
+      opaque,
+      pixels,
+      // A box that only grouped other layers is plain background once they are taken out.
+      backgroundOnly: visible < width * height * 0.02,
+      // Share of the visible layer that was guessed under layers in front, and where (source coordinates),
+      // so an image model can redo that part.
+      rebuiltRatio: visible ? rebuilt / visible : 0,
+      rebuiltRegion: rebuilt ? {
+        x: left + rebuiltBox.left,
+        y: top + rebuiltBox.top,
+        width: rebuiltBox.right - rebuiltBox.left + 1,
+        height: rebuiltBox.bottom - rebuiltBox.top + 1
+      } : null
+    };
+  }
+  return results;
+}
+
+// Screen background without the slices: `mask` (1 where a slice has visible pixels) is grown by 2px to cover
+// anti-aliased edges and filled from the surrounding background, in place.
+function inpaintMaskedImage(pixels, width, height, mask) {
+  const state = new Uint8Array(width * height);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (!mask[y * width + x]) continue;
+      for (let sy = Math.max(0, y - 2); sy <= Math.min(height - 1, y + 2); sy += 1) {
+        state.fill(1, sy * width + Math.max(0, x - 2), sy * width + Math.min(width - 1, x + 2) + 1);
+      }
+    }
+  }
+  inpaintUnknownPixels(pixels, width, height, state);
+  return pixels;
+}
+
+if (typeof module !== "undefined") {
+  module.exports = {
+    inpaintMaskedImage,
+    isolateSliceLayers,
+    sliceShapeCoverage
   };
 }
 
@@ -11509,9 +12816,44 @@ function buildBackgroundRepairJobs(review) {
   });
 }
 
+// Overlays (buttons, titles) that are not slices yet, so they can be cropped and patched out locally.
+// Overlays lying inside one slice (a piece of it) or enclosing several slices (a section box) are not new layers.
+function getMissingOverlaySliceCandidates(review, existingAssets, minOverlap = 0.6) {
+  const boxes = (existingAssets || []).map((asset) => asset?.placement).filter(Boolean);
+  const sharedArea = (a, b) => {
+    const shared = intersectDecompositionBoxes(a, b);
+    return shared ? shared.width * shared.height : 0;
+  };
+  const overlapRatio = (a, b) => {
+    const area = sharedArea(a, b);
+    return area ? area / (a.width * a.height + b.width * b.height - area) : 0;
+  };
+  const isCovered = (overlay) => boxes.some((box) => (
+    overlapRatio(box, overlay) >= minOverlap || sharedArea(box, overlay) >= overlay.width * overlay.height * 0.9
+  )) || boxes.filter((box) => sharedArea(box, overlay) >= box.width * box.height * 0.9).length >= 2;
+  const candidates = [];
+  for (const background of review?.backgrounds || []) {
+    if (!background.enabled) continue;
+    for (const overlay of background.overlays || []) {
+      if (isCovered(overlay.bbox)) continue;
+      boxes.push(overlay.bbox);
+      candidates.push({
+        name: overlay.name,
+        kind: "complex-decoration",
+        bbox: { ...overlay.bbox },
+        confidence: overlay.confidence,
+        containsEmbeddedText: false,
+        reason: overlay.reason
+      });
+    }
+  }
+  return candidates;
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     buildBackgroundRepairJobs,
+    getMissingOverlaySliceCandidates,
     createBackgroundDecompositionCache,
     createBackgroundDecompositionReview,
     getBackgroundDecompositionNavigation,
@@ -12590,9 +13932,13 @@ if (typeof module !== "undefined") {
       const editablePreviewRetry = document.getElementById("editablePreviewRetry");
       const editablePreviewCancel = document.getElementById("editablePreviewCancel");
       const backgroundDecompositionLoadingDialog = document.getElementById("backgroundDecompositionLoadingDialog");
+      const backgroundDecompositionLoadingTitle = document.getElementById("backgroundDecompositionLoadingTitle");
       const backgroundDecompositionLoadingDescription = document.getElementById("backgroundDecompositionLoadingDescription");
       const backgroundDecompositionElapsed = document.getElementById("backgroundDecompositionElapsed");
       const backgroundDecompositionLoadingCancel = document.getElementById("backgroundDecompositionLoadingCancel");
+      const backgroundDecompositionProgressList = document.getElementById("backgroundDecompositionProgressList");
+      const backgroundDecompositionBackground = document.getElementById("backgroundDecompositionBackground");
+      const backgroundDecompositionStartRedraw = document.getElementById("backgroundDecompositionStartRedraw");
       const backgroundDecompositionDialog = document.getElementById("backgroundDecompositionDialog");
       const backgroundDecompositionClose = document.getElementById("backgroundDecompositionClose");
       const backgroundDecompositionRegenerate = document.getElementById("backgroundDecompositionRegenerate");
@@ -12635,8 +13981,10 @@ if (typeof module !== "undefined") {
       const cutGrid = document.getElementById("cutGrid");
       const exportSlicesButton = document.getElementById("exportSlices");
       const transparentAllButton = document.getElementById("transparentAll");
+      const redrawAllSlicesButton = document.getElementById("redrawAllSlices");
       const toggleAllSlicesButton = document.getElementById("toggleAllSlices");
       const repairPreviewButton = document.getElementById("repairPreview");
+      const genFullBackgroundButton = document.getElementById("genFullBackground");
       const sliceSettingsDrawer = document.getElementById("sliceSettingsDrawer");
       const sliceSettingsClose = document.getElementById("sliceSettingsClose");
       const sliceSettingsTitle = document.getElementById("sliceSettingsTitle");
@@ -12690,6 +14038,8 @@ if (typeof module !== "undefined") {
       const modelConfigDeleteButton = document.getElementById("modelConfigDelete");
       const modelConfigTestButton = document.getElementById("modelConfigTest");
       const modelConfigPurposeInputs = [...modelConfigForm.querySelectorAll('input[name="modelConfigPurpose"]')];
+      const modelConfigSourceInputs = [...modelConfigForm.querySelectorAll('input[name="modelConfigSource"]')];
+      const modelConfigCliHint = document.getElementById("modelConfigCliHint");
       const modelConfigList = document.getElementById("modelConfigList");
       const startupGate = document.getElementById("startupGate");
       const startupMessage = document.getElementById("startupMessage");
@@ -12801,7 +14151,8 @@ if (typeof module !== "undefined") {
       let currentMode = "text-to-image";
       let currentStyle = "";
       let currentRatio = "9:16";
-      const currentCount = 1;
+      // Generate UI asks for this many design options at once and lets the user pick one.
+      const currentCount = 3;
       let activeResultIndex = 0;
       let renderedResultImageId = null;
       let referenceImages = [];
@@ -13230,31 +14581,32 @@ if (typeof module !== "undefined") {
         pendingExternalSliceDrag = null;
         sliceDraft = null;
         document.body.style.userSelect = "";
-        cutReorderDrag = null;
-        cutGrid.querySelector(".cut-drop-indicator")?.remove();
+        if (cutReorderDrag) {
+          cutReorderDrag = null;
+          renderCutModules(currentManifest);
+        }
       });
       document.addEventListener("pointermove", (event) => {
         if (!cutReorderDrag || cutReorderDrag.pointerId !== event.pointerId) return;
-        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest("#cutGrid [data-slice-id]");
-        if (!target) return;
-        cutReorderDrag.moved = true;
-        cutReorderDrag.targetId = target.dataset.sliceId;
-        cutReorderDrag.before = event.clientY < target.getBoundingClientRect().top + target.getBoundingClientRect().height / 2;
-        cutGrid.querySelectorAll(".drag-over").forEach((item) => item.classList.remove("drag-over"));
-        const indicator = cutGrid.querySelector(".cut-drop-indicator");
-        if (indicator) {
-          indicator.hidden = false;
-          const top = cutReorderDrag.before ? target.offsetTop - 5 : target.offsetTop + target.offsetHeight + 5;
-          indicator.style.top = `${Math.max(0, top)}px`;
-        }
         event.preventDefault();
+        const source = cutReorderDrag.item;
+        const target = document.elementFromPoint(event.clientX, event.clientY)?.closest("#cutGrid .cut-item");
+        if (!target || target === source) return;
+        // Layout positions (not animated rects) decide the side, so cards do not flip back and forth mid-animation.
+        const pointerY = event.clientY - cutGrid.getBoundingClientRect().top + cutGrid.scrollTop;
+        const after = pointerY > target.offsetTop + target.offsetHeight / 2;
+        const reference = after ? target.nextElementSibling : target;
+        if (reference === source || source.nextElementSibling === reference) return;
+        moveCutItemAnimated(source, reference);
+        cutReorderDrag.moved = true;
       });
       document.addEventListener("pointerup", (event) => {
         if (!cutReorderDrag || cutReorderDrag.pointerId !== event.pointerId) return;
         const drag = cutReorderDrag;
         cutReorderDrag = null;
-        cutGrid.querySelector(".cut-drop-indicator")?.remove();
-        if (drag.moved) reorderSliceAsset(drag.sourceId, drag.targetId, drag.before);
+        document.body.style.userSelect = "";
+        drag.item.classList.remove("dragging");
+        if (drag.moved) applySliceDisplayOrder([...cutGrid.querySelectorAll(".cut-item")].map((item) => item.dataset.sliceId));
       });
       document.addEventListener("pointerdown", async (event) => {
         if (
@@ -13413,6 +14765,11 @@ if (typeof module !== "undefined") {
           updateModelConfigSubmitCopy();
         });
       });
+      modelConfigSourceInputs.forEach((input) => {
+        input.addEventListener("change", () => {
+          if (input.checked) applyModelConfigSource(input.value, { resetValues: true });
+        });
+      });
       modelConfigDialogClose.addEventListener("click", closeModelConfigEditor);
       modelConfigDeleteButton.addEventListener("click", deleteEditedModelConfig);
       modelConfigTestButton.addEventListener("click", testEditedModelConfig);
@@ -13489,6 +14846,10 @@ if (typeof module !== "undefined") {
         await makeAllSlicesTransparent();
       });
 
+      redrawAllSlicesButton?.addEventListener("click", () => {
+        redrawAllSlicesForHandoff();
+      });
+
       toggleAllSlicesButton.addEventListener("click", () => {
         const activeImage = getActiveResultImage();
         const assets = activeImage?.sliceManifest?.assets || [];
@@ -13516,20 +14877,10 @@ if (typeof module !== "undefined") {
           repairPreviewButton.textContent = typeof t === "function" ? t("repair_preview", "Preview Inpaint") : "Preview Inpaint";
           return;
         }
-        repairPreviewButton.disabled = true;
-        setStatus(typeof t === "function" ? t("status_repair_preview_generating", "Generating inpaint preview...") : "Generating inpaint preview...");
-        try {
-          image.src = await createRepairedPreviewImage(activeImage);
-          repairPreviewActive = true;
-          layer.hidden = false;
-          renderSliceOverlay(card, layer, image);
-          repairPreviewButton.textContent = typeof t === "function" ? t("btn_exit_preview", "Exit Inpaint Preview") : "Exit Inpaint Preview";
-        } catch (error) {
-          setStatus(`Failed to generate completion preview: ${error.message || String(error)}`, "error");
-        } finally {
-          repairPreviewButton.disabled = false;
-        }
+        await enterRepairPreview(activeImage);
       });
+
+      genFullBackgroundButton.addEventListener("click", generateLocalFullBackgrounds);
 
       exportSlicesButton.addEventListener("click", async () => {
         await exportSlicePackage();
@@ -13692,13 +15043,20 @@ if (typeof module !== "undefined") {
             progressId
           };
           currentManifest = await createBackendManifest(options);
+          currentManifest.resultChoicePending = currentManifest.resultImages.length > 1;
           clearSliceHistory();
           activeWorkspaceDraftId = null;
           renderResults(currentManifest);
           renderCutModules(currentManifest);
-          setImportActionsDisabled(false);
+          setImportActionsDisabled(currentManifest.resultChoicePending);
           await saveWorkspaceDraftAndRefreshList();
-          if (currentManifest.resultImages.length !== currentCount) {
+          if (currentManifest.resultChoicePending) {
+            const missing = currentCount - currentManifest.resultImages.length;
+            setStatus(
+              `Pick one of the ${currentManifest.resultImages.length} design options.${missing > 0 ? ` ${missing} option${missing > 1 ? "s" : ""} failed to generate.` : ""}`,
+              missing > 0 ? "warning" : "info"
+            );
+          } else if (currentManifest.resultImages.length !== currentCount) {
             setStatus(
               `Requested ${currentCount} images; ${currentManifest.resultImages.length} returned.`,
               currentManifest.resultImages.length < currentCount ? "warning" : "info"
@@ -13876,6 +15234,36 @@ if (typeof module !== "undefined") {
         runBackgroundDecompositionPlanning(false);
       });
       backgroundDecompositionLoadingCancel.addEventListener("click", cancelBackgroundDecompositionPlanning);
+      // Closes the AI Slice popup; the redraws go on and show progress on each slice in the list.
+      backgroundDecompositionBackground?.addEventListener("click", () => {
+        backgroundDecompositionLoadingDialog.classList.remove("open");
+        backgroundDecompositionLoadingDialog.setAttribute("aria-hidden", "true");
+        syncGlobalLoadingState();
+      });
+      backgroundDecompositionStartRedraw?.addEventListener("click", () => {
+        if (sliceRedrawChoice) finishSliceRedrawChoice([...sliceRedrawChoice.selected]);
+      });
+      // Tick boxes in the redraw choice: a box, the whole row, or All / None / Suggested.
+      backgroundDecompositionProgressList?.addEventListener("click", (event) => {
+        const choice = sliceRedrawChoice;
+        if (!choice) return;
+        const pick = event.target.closest("[data-pick]")?.dataset.pick;
+        if (pick) {
+          choice.selected = new Set(pick === "all" ? choice.choosable : pick === "suggested" ? [...choice.suggested] : []);
+          renderSliceProgress();
+          return;
+        }
+        const box = event.target.closest("[data-redraw-pick]");
+        if (box) {
+          toggleSliceRedrawPick(box.dataset.redrawPick, box.checked);
+          return;
+        }
+        const row = event.target.closest(".slice-progress-item.pickable");
+        if (row) toggleSliceRedrawPick(row.dataset.sliceId);
+      });
+      backgroundDecompositionProgressList?.addEventListener("wheel", () => {
+        backgroundDecompositionProgressList.dataset.userScrolled = "1";
+      }, { passive: true });
       backgroundDecompositionClose.addEventListener("click", closeBackgroundDecompositionReview);
       backgroundDecompositionRegenerate.addEventListener("click", () => {
         closeBackgroundDecompositionReview();
@@ -14404,6 +15792,10 @@ if (typeof module !== "undefined") {
         sliceId = null
       } = {}) {
         sidebar.classList.add("has-result");
+        if (manifest.resultChoicePending && manifest.resultImages.length > 1) {
+          renderResultChoice(manifest);
+          return;
+        }
         activeResultIndex = Math.max(0, Math.min(Number(resultIndex) || 0, manifest.resultImages.length - 1));
         activeSliceId = sliceId;
         sliceEdit = null;
@@ -14412,6 +15804,62 @@ if (typeof module !== "undefined") {
         ensureSliceState(manifest);
         renderActiveResult(manifest);
         scheduleWorkspaceDraftSave();
+      }
+
+      // Generate UI options side by side; the picked one becomes the only result image (slicing works on it).
+      function renderResultChoice(manifest) {
+        previewCanvasViewport?.destroy();
+        previewCanvasViewport = null;
+        previewZoomControls.hidden = true;
+        resultCount.textContent = "";
+        resultGrid.innerHTML = `
+          <div class="result-choice">
+            <div class="result-choice-head">
+              <strong>Pick a design</strong>
+              <span>${manifest.resultImages.length} options from the same prompt. The one you pick is kept for AI Slice; the others are dropped.</span>
+            </div>
+            <div class="result-choice-grid">
+              ${manifest.resultImages.map((image, index) => `
+                <figure class="result-choice-option">
+                  <button class="result-choice-preview" type="button" data-zoom-result-option="${index}" title="Click to see it larger">
+                    <img src="${image.dataUrl}" alt="Design option ${index + 1}" />
+                  </button>
+                  <figcaption>
+                    <span>Option ${index + 1}</span>
+                    <button class="result-choice-use" type="button" data-use-result-option="${index}">Use this</button>
+                  </figcaption>
+                </figure>
+              `).join("")}
+            </div>
+          </div>
+        `;
+        resultGrid.querySelectorAll("[data-use-result-option]").forEach((button) => {
+          button.addEventListener("click", () => chooseResultOption(Number(button.dataset.useResultOption)));
+        });
+        // Clicking a preview shows that option alone at full height; clicking again goes back to all options.
+        resultGrid.querySelectorAll("[data-zoom-result-option]").forEach((button) => {
+          button.addEventListener("click", () => {
+            const option = button.closest(".result-choice-option");
+            const zoomed = !option.classList.contains("zoomed");
+            resultGrid.querySelectorAll(".result-choice-option").forEach((other) => other.classList.toggle("zoomed", other === option && zoomed));
+            resultGrid.querySelector(".result-choice-grid")?.classList.toggle("has-zoomed", zoomed);
+          });
+        });
+      }
+
+      function chooseResultOption(index) {
+        const manifest = currentManifest;
+        const chosen = manifest?.resultImages?.[index];
+        if (!chosen) return;
+        manifest.resultImages = [chosen];
+        manifest.previewImage = { dataUrl: chosen.dataUrl };
+        delete manifest.resultChoicePending;
+        clearSliceHistory();
+        renderResults(manifest, { resultIndex: 0 });
+        renderCutModules(manifest);
+        setImportActionsDisabled(false);
+        scheduleWorkspaceDraftSave();
+        setStatus(`Using option ${index + 1}. Run AI Slice when you are ready.`, "success");
       }
 
       function renderLoadingResult(message) {
@@ -14586,6 +16034,16 @@ if (typeof module !== "undefined") {
           : ` · R${values.join("/")}`;
       }
 
+      // "Unity: ready / review / fix" under the slice size; the tooltip lists what the hand-off check found.
+      function renderHandoffCheck(asset) {
+        const check = asset.handoffCheck;
+        if (!check) return "";
+        const labels = { ready: "Unity: ready", check: "Unity: review", fix: "Unity: needs fixing" };
+        const colors = { ready: "#1f9d55", check: "#b7791f", fix: "#d64545" };
+        const details = check.issues.length ? check.issues.map((issue) => `• ${issue.message}`).join("\n") : "Sharp, clean edges, enough resolution.";
+        return `<span class="cut-size cut-handoff" style="color:${colors[check.status]};" title="${escapeHtml(details)}">${labels[check.status]}${check.issues.length ? ` (${check.issues.length})` : ""}</span>`;
+      }
+
       function renderCutModules(manifest, animateReorder = false) {
         if (!manifest?.resultImages?.length) {
           renderEmptyCutModules();
@@ -14600,8 +16058,11 @@ if (typeof module !== "undefined") {
         const assets = activeImage.sliceManifest.assets;
         exportSlicesButton.disabled = assets.length === 0;
         transparentAllButton.disabled = assets.length === 0 || assets.every((asset) => asset.transparent);
+        if (redrawAllSlicesButton) redrawAllSlicesButton.disabled = assets.length === 0 || Boolean(backgroundDecompositionRequest);
         toggleAllSlicesButton.disabled = assets.length === 0;
         repairPreviewButton.disabled = assets.length === 0;
+        genFullBackgroundButton.disabled = !getCachedBackgroundDecomposition(activeImage.backgroundDecompositionCache, activeImage)
+          ?.backgrounds.some((background) => background.enabled);
         toggleAllSlicesButton.textContent = assets.length > 0 && assets.every((asset) => asset.hidden) ? "Show All" : "Hide All";
         if (assets.length === 0) {
           closeSliceSettingsDrawer();
@@ -14610,16 +16071,19 @@ if (typeof module !== "undefined") {
         }
         const displayAssets = [...assets].reverse();
         cutGrid.innerHTML = displayAssets.map((asset, index) => `
-          <div class="cut-item${isSliceSelected(asset.id) ? " active" : ""}${asset.aiProcessing ? " ai-processing" : ""}${asset.auditFailed ? " audit-failed" : ""}" data-slice-id="${asset.id}" draggable="${asset.aiProcessing ? "false" : "true"}">
+          <div class="cut-item${isSliceSelected(asset.id) ? " active" : ""}${asset.aiProcessing ? " ai-processing" : ""}${asset.auditFailed ? " audit-failed" : ""}" data-slice-id="${asset.id}">
+            <button class="cut-drag-handle" type="button" aria-label="Drag to reorder ${escapeHtml(asset.name)}" title="Drag to reorder"${asset.aiProcessing ? " disabled" : ""}><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3 4h10M3 8h10M3 12h10"/></svg></button>
             <img class="cut-thumb" src="${asset.dataUrl}" alt="${escapeHtml(asset.name)}" data-slice-id="${asset.id}" draggable="false" style="border-radius:${getSliceRadiiCssValue(asset, currentManifest?.screen)};" />
             <div class="cut-meta">
               <span class="cut-name">${assets.length - index}. ${escapeHtml(asset.name)}</span>
               <span class="cut-size">${asset.placement.width}px × ${asset.placement.height}px${formatSliceRadiiLabel(asset)}${asset.transparent ? " · Transparent PNG" : ""}${asset.auditFailed ? " · Audit failed · needs manual adjustment" : ""}${asset.aiTransparent ? " · AI transparent" : ""}${getAiInpaintTypeLabel(asset) ? ` · ${getAiInpaintTypeLabel(asset)}` : ""}${asset.svgData ? " · SVG" : ""}${asset.aiRedrawn ? " · AI redraw" : ""}</span>
+              ${renderHandoffCheck(asset)}
             </div>
             <details class="cut-action-menu">
               <summary class="cut-action-trigger">Transparent</summary>
               <div class="cut-action-list">
                 <button class="cut-transparent${asset.transparent && !asset.aiTransparent ? " done" : ""}" type="button" data-transparent-slice="${asset.id}"${asset.aiProcessing ? " disabled" : ""}>${asset.transparent && !asset.aiTransparent ? `Made transparent ${renderRestoreIcon()}` : "Transparent"}</button>
+                <button class="cut-ai-upscale${asset.aiUpscaled ? " done" : ""}" type="button" data-ai-upscale-slice="${asset.id}"${asset.aiProcessing || asset.svgData ? " disabled" : ""}>${asset.aiUpscaled ? "AI redrawn at 4x" : "AI redraw 4x (sharp, clean edges)"}</button>
                 <button class="cut-ai-transparent${asset.aiTransparent ? " done" : ""}" type="button" data-ai-transparent-slice="${asset.id}"${asset.aiProcessing ? " disabled" : ""}>${asset.aiTransparent ? `AI made transparent ${renderRestoreIcon()}` : "AI transparent"}</button>
               </div>
             </details>
@@ -14636,10 +16100,6 @@ if (typeof module !== "undefined") {
             ${asset.aiProcessing ? `<span class="cut-ai-loading"><span class="cut-ai-loading-label">${escapeHtml(asset.aiProcessingLabel || "Requesting AI to process the slice · 0s")}</span><button class="cut-ai-cancel" type="button" data-cancel-slice-ai="${asset.id}" aria-label="Cancel AI generation" title="Cancel AI generation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span>` : ""}
           </div>
         `).join("");
-        const dropIndicator = document.createElement("div");
-        dropIndicator.className = "cut-drop-indicator";
-        dropIndicator.hidden = true;
-        cutGrid.appendChild(dropIndicator);
         requestAnimationFrame(() => {
           cutGrid.scrollTop = scrollTop;
         });
@@ -14671,37 +16131,14 @@ if (typeof module !== "undefined") {
           });
         });
         cutGrid.querySelectorAll("[data-slice-id]").forEach((item) => {
-          item.addEventListener("pointerdown", (event) => {
-            if (getActiveSliceAsset(item.dataset.sliceId)?.aiProcessing) return;
-            if (event.button !== 0 || event.target.closest("button, input, textarea, select, details, .cut-thumb")) return;
-            cutReorderDrag = { pointerId: event.pointerId, sourceId: item.dataset.sliceId, targetId: item.dataset.sliceId, moved: false };
-            item.setPointerCapture?.(event.pointerId);
-          });
-          item.addEventListener("dragstart", (event) => {
-            if (getActiveSliceAsset(item.dataset.sliceId)?.aiProcessing) {
-              event.preventDefault();
-              return;
-            }
+          const handle = item.querySelector(":scope > .cut-drag-handle");
+          handle?.addEventListener("pointerdown", (event) => {
+            if (event.button !== 0 || getActiveSliceAsset(item.dataset.sliceId)?.aiProcessing) return;
+            event.preventDefault();
+            cutReorderDrag = { pointerId: event.pointerId, item, moved: false };
             item.classList.add("dragging");
-            event.dataTransfer.effectAllowed = "move";
-            event.dataTransfer.setData("text/plain", item.dataset.sliceId);
-          });
-          item.addEventListener("dragend", () => {
-            item.classList.remove("dragging");
-            cutGrid.querySelectorAll(".drag-over").forEach((target) => target.classList.remove("drag-over"));
-          });
-          item.addEventListener("dragover", (event) => {
-            event.preventDefault();
-            event.dataTransfer.dropEffect = "move";
-            if (event.currentTarget !== item) return;
-            item.classList.add("drag-over");
-          });
-          item.addEventListener("dragleave", () => item.classList.remove("drag-over"));
-          item.addEventListener("drop", (event) => {
-            event.preventDefault();
-            item.classList.remove("drag-over");
-            const sourceId = event.dataTransfer.getData("text/plain");
-            reorderSliceAsset(sourceId, item.dataset.sliceId);
+            document.body.style.userSelect = "none";
+            handle.setPointerCapture?.(event.pointerId);
           });
           item.addEventListener("click", (event) => {
             if (event.target.closest("[data-remove-slice]")) {
@@ -14796,6 +16233,13 @@ if (typeof module !== "undefined") {
             } else {
               await makeSliceTransparent(button.dataset.transparentSlice);
             }
+          });
+        });
+        cutGrid.querySelectorAll("[data-ai-upscale-slice]").forEach((button) => {
+          button.addEventListener("click", async (event) => {
+            event.stopPropagation();
+            button.closest("details")?.removeAttribute("open");
+            await makeSliceAiUpscale(button.dataset.aiUpscaleSlice);
           });
         });
         cutGrid.querySelectorAll("[data-ai-transparent-slice]").forEach((button) => {
@@ -15400,6 +16844,7 @@ if (typeof module !== "undefined") {
         closeSliceSettingsDrawer();
         exportSlicesButton.disabled = true;
         transparentAllButton.disabled = true;
+        if (redrawAllSlicesButton) redrawAllSlicesButton.disabled = true;
         cutGrid.innerHTML = "";
       }
 
@@ -16140,9 +17585,17 @@ if (typeof module !== "undefined") {
       function updateBackgroundDecompositionElapsed() {
         const seconds = Math.max(0, Math.floor((Date.now() - backgroundDecompositionStartedAt) / 1000));
         backgroundDecompositionElapsed.textContent = `Elapsed ${seconds}s`;
+        // The slice being redrawn shows its own seconds (only its label changes; thumbnails are not re-rendered).
+        backgroundDecompositionProgressList?.querySelectorAll(".slice-progress-item.busy").forEach((row) => {
+          const item = sliceProgress.get(row.dataset.sliceId);
+          const label = item && busyProgressLabel(item.state, getActiveSliceAsset(row.dataset.sliceId));
+          const state = row.querySelector(".slice-progress-state");
+          if (label && state) state.textContent = label;
+        });
       }
 
       function setBackgroundDecompositionPlanningRunning(running) {
+        if (running) resetSliceProgress();
         backgroundDecompositionLoadingDialog.classList.toggle("open", running);
         backgroundDecompositionLoadingDialog.setAttribute("aria-hidden", String(!running));
         backgroundDecompositionLoadingCancel.disabled = false;
@@ -16163,6 +17616,13 @@ if (typeof module !== "undefined") {
 
       function cancelBackgroundDecompositionPlanning() {
         if (!backgroundDecompositionRequest) return;
+        if (backgroundDecompositionRequest.mode === "auto-redraw") {
+          // Slices are already added; only the redraws stop.
+          stopAutoSlicePasses();
+          backgroundDecompositionLoadingCancel.disabled = true;
+          backgroundDecompositionLoadingCancel.textContent = "Cancelling...";
+          return;
+        }
         backgroundDecompositionLoadingCancel.disabled = true;
         backgroundDecompositionLoadingCancel.textContent = "Cancelling...";
         fetchBackend(
@@ -16173,6 +17633,10 @@ if (typeof module !== "undefined") {
       }
 
       async function runBackgroundDecompositionPlanning(forceRecognition = false) {
+        if (currentManifest?.resultChoicePending) {
+          setStatus("Pick one of the generated design options first.", "warning");
+          return;
+        }
         const activeImage = getActiveResultImage();
         if (
           !currentManifest
@@ -16226,22 +17690,34 @@ if (typeof module !== "undefined") {
           if (!response.ok) {
             // A missing route has no error body; a 404 from the model provider (e.g. a retired model) does.
             if (response.status === 404 && !result.error) {
-              throw new Error("The local service is outdated. Close it and run the deploy-environment script again");
+              throw new Error("The local service is outdated. Close it and start it again from menu.bat (or deploy-environment.command)");
             }
             throw new Error(result.error || `AI slice analysis failed: ${response.status}`);
           }
           const detectedAssets = Array.isArray(result.assets) ? result.assets : [];
           const backgrounds = Array.isArray(result.backgrounds) ? result.backgrounds : [];
-          const addedCount = await appendDetectedSliceAssets(
-            activeImage,
-            detectedAssets,
-            progressId,
-            controller.signal
-          );
           backgroundDecompositionReview = createBackgroundDecompositionReview(
             { backgrounds },
             currentManifest.screen
           );
+          // Buttons and other overlays become slices too, so they can be exported and patched out of the background.
+          const overlayAssets = getMissingOverlaySliceCandidates(backgroundDecompositionReview, [
+            ...activeImage.sliceManifest?.assets || [],
+            ...detectedAssets.map((asset) => ({ placement: asset.bbox }))
+          ]);
+          const addedCount = await appendDetectedSliceAssets(
+            activeImage,
+            [...detectedAssets, ...overlayAssets],
+            progressId,
+            controller.signal
+          );
+          // The popup stays open with the element list while the slices are checked and redrawn, unless the user
+          // chose "Run in background".
+          if (pendingAutoSlicePass && addedCount > 0) {
+            backgroundDecompositionLoadingDescription.textContent = "Checking every slice and redrawing the ones that are not clean enough…";
+            backgroundDecompositionRequest.mode = "auto-redraw";
+            await pendingAutoSlicePass;
+          }
           backgroundDecompositionReview.imageId = activeImage.id;
           persistBackgroundDecompositionReview();
           if (backgrounds.length === 0) {
@@ -16942,6 +18418,8 @@ if (typeof module !== "undefined") {
                 pair.composite,
                 pair.rawFull
               );
+              placeSliceBelowContained(activeImage.sliceManifest.assets, pair.composite);
+              placeSliceBelowContained(activeImage.sliceManifest.assets, pair.rawFull);
               normalizeSliceAssetNames(activeImage.sliceManifest.assets);
               selectedSliceIds.add(pair.composite.id);
               activeSliceId = pair.composite.id;
@@ -17019,6 +18497,7 @@ if (typeof module !== "undefined") {
           id: `slice_ai_${batchId}_${index}`,
           name: String(detected.name || `slice_${String(index).padStart(2, "0")}`),
           kind: detected.kind,
+          shape: detected.shape || "free",
           type: "manual_slice",
           source: "ai-bbox",
           aiBatchId: batchId,
@@ -17247,6 +18726,7 @@ if (typeof module !== "undefined") {
           }, index, batchId, signal);
           preparedAssets.push(prepared);
           activeImage.sliceManifest.assets.push(prepared);
+          setSliceProgress(prepared.id, "detected");
           activeSliceId = prepared.id;
           const card = resultGrid.querySelector(".result-card.slice-mode");
           const layer = card?.querySelector(".slice-layer");
@@ -17254,14 +18734,22 @@ if (typeof module !== "undefined") {
           if (card && layer && image) renderSliceOverlay(card, layer, image);
         }
         if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+        preparedAssets.forEach((asset) => placeSliceBelowContained(activeImage.sliceManifest.assets, asset));
+        const backgroundOnly = await isolateDetectedSliceLayers(activeImage, preparedAssets);
+        for (const asset of backgroundOnly) {
+          sliceProgress.delete(asset.id);
+          activeImage.sliceManifest.assets.splice(activeImage.sliceManifest.assets.indexOf(asset), 1);
+          preparedAssets.splice(preparedAssets.indexOf(asset), 1);
+        }
         activeSliceId = preparedAssets.at(-1)?.id || activeSliceId;
         refreshSliceVisibility();
         renderCutModules(currentManifest);
         scheduleWorkspaceDraftSave();
+        runAutoSliceAiPasses(preparedAssets);
         return preparedAssets.length;
       }
 
-      async function addSliceAsset(placement) {
+      async function addSliceAsset(placement, preferredName = "") {
         const activeImage = getActiveResultImage();
         if (!activeImage) {
           return;
@@ -17274,7 +18762,7 @@ if (typeof module !== "undefined") {
         const index = activeImage.sliceManifest.assets.length + 1;
         const id = `slice_${activeResultIndex + 1}_${Date.now().toString(36)}_${index}`;
         const name = reserveSliceAssetName(
-          "",
+          preferredName,
           new Set(activeImage.sliceManifest.assets.map((asset) => asset.name))
         );
         const normalizedPlacement = normalizeSlicePlacement(placement, currentManifest?.screen);
@@ -17300,6 +18788,7 @@ if (typeof module !== "undefined") {
           ...repair
         };
         activeImage.sliceManifest.assets.push(asset);
+        placeSliceBelowContained(activeImage.sliceManifest.assets, asset);
         activeSliceId = id;
         if (repairPreviewActive) {
           const repairedPreview = await createRepairedPreviewImage(activeImage);
@@ -17312,6 +18801,7 @@ if (typeof module !== "undefined") {
         if (card && layer && image) renderSliceOverlay(card, layer, image);
         renderCutModules(currentManifest);
         scheduleWorkspaceDraftSave();
+        return asset;
       }
 
       async function updateSliceAssetCrop(id) {
@@ -17416,7 +18906,10 @@ if (typeof module !== "undefined") {
         try {
           const restoreState = createSliceTransparencyRestoreState(asset);
           const sourceDataUrl = restoreState.dataUrl;
-          const transparentDataUrl = await removeEdgeBackground(sourceDataUrl);
+          // An untouched AI slice keeps its layer separation (layers behind and in front removed) when turned back on.
+          const transparentDataUrl = asset.layerTransparentDataUrl && sourceDataUrl === asset.originalDataUrl
+            ? asset.layerTransparentDataUrl
+            : await removeEdgeBackground(sourceDataUrl);
           recordSliceHistory();
           applySliceTransparencyResult(asset, {
             dataUrl: transparentDataUrl,
@@ -17444,6 +18937,22 @@ if (typeof module !== "undefined") {
         refreshSliceVisibility();
         renderCutModules(currentManifest);
         scheduleWorkspaceDraftSave();
+      }
+
+      // AI-created slices start transparent; the original crop stays restorable from the Transparent menu.
+      async function applyLocalTransparency(assets) {
+        for (const asset of assets) {
+          if (asset.transparent || asset.svgData) continue;
+          try {
+            const restoreState = createSliceTransparencyRestoreState(asset);
+            applySliceTransparencyResult(asset, {
+              dataUrl: await removeEdgeBackground(restoreState.dataUrl),
+              ai: false
+            });
+          } catch (error) {
+            console.warn(`Automatic transparency failed for ${asset.name}`, error);
+          }
+        }
       }
 
       async function makeAllSlicesTransparent() {
@@ -17491,16 +19000,17 @@ if (typeof module !== "undefined") {
         }
       }
 
-      async function makeSliceAiTransparent(id) {
+      // background: true skips the full-screen modal (automatic runs); the slice itself shows progress and Cancel.
+      async function makeSliceAiTransparent(id, { background = false, prompt = "", label = "Requesting AI to generate a transparent PNG" } = {}) {
         const asset = getActiveSliceAsset(id);
         if (!asset || asset.aiProcessing) {
           return;
         }
-        setBusy(true, `Requesting AI to generate a transparent PNG: ${asset.name}`, true);
-        setSliceAiProcessing(asset, "Requesting AI to generate a transparent PNG · 0s", true);
+        if (!background) setBusy(true, `${label}: ${asset.name}`, true);
+        setSliceAiProcessing(asset, `${label} · 0s`, true);
         const progressId = createAiProgressId("transparent");
         const controller = beginSliceAiRequest(asset, progressId);
-        const stopProgress = startAiProgressPolling(progressId, (progress) => updateSliceAiProgress(asset, progress, "Requesting AI to generate a transparent PNG"));
+        const stopProgress = startAiProgressPolling(progressId, (progress) => updateSliceAiProgress(asset, progress, label));
         try {
           const restoreState = createSliceTransparencyRestoreState(asset);
           const sourceDataUrl = restoreState.dataUrl;
@@ -17513,7 +19023,7 @@ if (typeof module !== "undefined") {
               name: asset.name,
               width: asset.placement.width,
               height: asset.placement.height,
-              prompt: buildAiTransparentPrompt(asset),
+              prompt: prompt || buildAiTransparentPrompt(asset),
               progressId,
               quality: "high"
             })
@@ -17538,7 +19048,8 @@ if (typeof module !== "undefined") {
           refreshSliceVisibility();
           renderCutModules(currentManifest);
           scheduleWorkspaceDraftSave();
-          setStatus(`Generated AI transparent PNG: ${asset.name}. The original slice is kept.`, "success");
+          if (!background) setStatus(`Generated AI transparent PNG: ${asset.name}. The original slice is kept.`, "success");
+          return true;
         } catch (error) {
           if (error?.name !== "AbortError") {
             setStatus(`AI transparent PNG failed: ${error.message || String(error)}`, "error");
@@ -17548,8 +19059,9 @@ if (typeof module !== "undefined") {
           finishSliceAiRequest(asset, controller);
           if (aiCompletePreview?.sliceId === id) aiCompletePreview = null;
           setSliceAiProcessing(asset, "", false);
-          releaseBusyIfIdle();
+          if (!background) releaseBusyIfIdle();
         }
+        return false;
       }
 
       async function makeSliceAiComplete(id, regions) {
@@ -17922,23 +19434,37 @@ if (typeof module !== "undefined") {
         scheduleWorkspaceDraftSave();
       }
 
-      function reorderSliceAsset(sourceId, targetId, before = true) {
-        if (!sourceId || !targetId || sourceId === targetId) return;
-        const activeImage = getActiveResultImage();
-        const assets = activeImage?.sliceManifest?.assets;
+      // The list shows the top layer first, while assets are stored bottom-to-top.
+      function applySliceDisplayOrder(displayIds) {
+        const assets = getActiveResultImage()?.sliceManifest?.assets;
         if (!assets) return;
-        const displayAssets = [...assets].reverse();
-        const sourceIndex = displayAssets.findIndex((asset) => asset.id === sourceId);
-        const targetIndex = displayAssets.findIndex((asset) => asset.id === targetId);
-        if (sourceIndex < 0 || targetIndex < 0) return;
-        if (displayAssets[sourceIndex].aiProcessing || displayAssets[targetIndex].aiProcessing) return;
+        const byId = new Map(assets.map((asset) => [asset.id, asset]));
+        const ordered = displayIds.map((id) => byId.get(id)).filter(Boolean).reverse();
+        if (ordered.length !== assets.length || ordered.every((asset, index) => asset === assets[index])) {
+          renderCutModules(currentManifest);
+          return;
+        }
         recordSliceHistory();
-        const [moved] = displayAssets.splice(sourceIndex, 1);
-        const targetIndexAfterMove = displayAssets.findIndex((asset) => asset.id === targetId);
-        displayAssets.splice(Math.max(0, targetIndexAfterMove + (before ? 0 : 1)), 0, moved);
-        assets.splice(0, assets.length, ...displayAssets.reverse());
-        renderCutModules(currentManifest, true);
+        assets.splice(0, assets.length, ...ordered);
+        renderCutModules(currentManifest);
         scheduleWorkspaceDraftSave();
+      }
+
+      // Moves a card and slides the cards it passes into their new places.
+      function moveCutItemAnimated(item, reference) {
+        const items = [...cutGrid.querySelectorAll(".cut-item")];
+        const before = new Map(items.map((card) => [card, card.offsetTop]));
+        cutGrid.insertBefore(item, reference);
+        for (const card of items) {
+          const delta = before.get(card) - card.offsetTop;
+          if (!delta || card === item) continue;
+          card.style.transition = "none";
+          card.style.transform = `translateY(${delta}px)`;
+          requestAnimationFrame(() => {
+            card.style.transition = "transform 160ms ease";
+            card.style.transform = "";
+          });
+        }
       }
 
       async function cropImageRegion(dataUrl, placement) {
@@ -17972,27 +19498,7 @@ if (typeof module !== "undefined") {
         context.drawImage(source, 0, 0);
         const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
         const pixels = imageData.data;
-        const background = sampleEdgeColor(pixels, canvas.width, canvas.height);
-        const hardThreshold = 34;
-        const softThreshold = 82;
-
-        for (let index = 0; index < pixels.length; index += 4) {
-          const distance = colorDistance(
-            pixels[index],
-            pixels[index + 1],
-            pixels[index + 2],
-            background.r,
-            background.g,
-            background.b
-          );
-          if (distance <= hardThreshold) {
-            pixels[index + 3] = 0;
-          } else if (distance < softThreshold) {
-            const alphaRatio = (distance - hardThreshold) / (softThreshold - hardThreshold);
-            pixels[index + 3] = Math.round(pixels[index + 3] * alphaRatio);
-          }
-        }
-
+        removeEdgeBackgroundPixels(pixels, canvas.width, canvas.height);
         context.putImageData(imageData, 0, 0);
         return canvas.toDataURL("image/png");
       }
@@ -18086,7 +19592,8 @@ if (typeof module !== "undefined") {
           ...(!asset.svgData && asset.dataUrl ? {
             dataUrl: await ensurePngOrJpegDataUrl(asset.dataUrl)
           } : {}),
-          selected: isSliceAssetIncludedForImport(asset)
+          selected: isSliceAssetIncludedForImport(asset),
+          parentId: findContainingSliceId(asset, activeImage.sliceManifest.assets.filter(isSliceAssetIncludedForImport))
         })));
         const previewDataUrl = await createRepairedPreviewImage(activeImage);
         return {
@@ -18150,14 +19657,554 @@ if (typeof module !== "undefined") {
         return true;
       }
 
-      function hasConfiguredVisionAccess() {
-        const configId = modelConfigState.taskRouting.vision;
-        return Boolean(modelConfigState.modelConfigs.some((config) => (
+      // Runs after AI Slice while the AI Slice popup lists every element: the hand-off check picks the slices to
+      // recreate at 4x (smallest first, rebuilt ones first), the rest of the rebuilt slices get the hidden-part fix,
+      // then the check is shown on every slice. A slice that is recreated skips the hidden-part fix (the redraw
+      // restores covered parts itself), so no extra Codex call and no second slice.
+      let autoSliceAiRun = 0;
+      // High enough for a whole screen; the popup shows progress and Cancel / Run in background.
+      const AUTO_UPSCALE_LIMIT = 40;
+      const AUTO_UPSCALE_SCALE = 4;
+      // Five at once; lowered automatically when the account reports a rate limit.
+      const AUTO_UPSCALE_CONCURRENCY = 5;
+      const SMALL_SLICE_SIDE = 160;
+      let upscaleSkippedCount = 0;
+      let pendingAutoSlicePass = null;
+      function runAutoSliceAiPasses(assets, { fixHiddenParts = true } = {}) {
+        const run = ++autoSliceAiRun;
+        pendingAutoSlicePass = (async () => {
+          try {
+            const candidates = await planSliceUpscales(assets, run);
+            const choosing = backgroundDecompositionLoadingDialog.classList.contains("open");
+            const picked = run === autoSliceAiRun ? await chooseSliceUpscales(assets, candidates, run) : null;
+            if (picked === null || run !== autoSliceAiRun) {
+              await checkSlicesForHandoff(assets, { announce: true });
+              return;
+            }
+            const queue = buildUpscaleQueue(picked);
+            const queued = new Set(queue.map((item) => item.id));
+            // After the user picked, only what they ticked uses AI; unattended runs also fix hidden parts.
+            if (fixHiddenParts && !choosing && run === autoSliceAiRun) await fixRebuiltSlicesWithAi(assets.filter((asset) => asset.rebuiltRegion && !queued.has(asset.id)), run);
+            if (run === autoSliceAiRun) await runSliceUpscales(queue, run);
+            if (run === autoSliceAiRun) await checkSlicesForHandoff(assets, { announce: true });
+          } catch (error) {
+            console.warn("Automatic slice AI pass failed", error);
+          }
+        })();
+        return pendingAutoSlicePass;
+      }
+
+      // "AI Redraw All": the same check and 4x redraw as after AI Slice, on every slice of the current image, with the
+      // progress list in the AI Slice popup. Slices already redrawn are kept.
+      async function redrawAllSlicesForHandoff() {
+        const activeImage = getActiveResultImage();
+        const assets = [...(activeImage?.sliceManifest?.assets || [])];
+        if (!assets.length || backgroundDecompositionRequest || uiBusy) return;
+        if (!hasConfiguredTaskAccess("generation")) {
+          setStatus("Set up an image generation model (for example Codex CLI) in Settings first.", "warning");
+          return;
+        }
+        backgroundDecompositionRequest = { controller: new AbortController(), progressId: "", mode: "auto-redraw" };
+        setBackgroundDecompositionPlanningRunning(true);
+        backgroundDecompositionLoadingTitle.textContent = "AI Redraw in Progress";
+        backgroundDecompositionLoadingDescription.textContent = "Checking every slice and redrawing the ones that are not clean enough…";
+        assets.filter((asset) => !asset.svgData).forEach((asset) => setSliceProgress(asset.id, "detected"));
+        try {
+          await runAutoSliceAiPasses(assets.filter((asset) => !asset.svgData), { fixHiddenParts: false });
+        } finally {
+          backgroundDecompositionRequest = null;
+          setBackgroundDecompositionPlanningRunning(false);
+          backgroundDecompositionLoadingTitle.textContent = typeof t === "function" ? t("loading_ai_decomp", "AI Slicing in Progress") : "AI Slicing in Progress";
+          renderCutModules(currentManifest);
+        }
+      }
+
+      // Stops the automatic passes (AI Slice popup Cancel): the slice being redrawn is cancelled, the rest skipped.
+      function stopAutoSlicePasses() {
+        if (sliceRedrawChoice) {
+          // "Skip redraw" while choosing: the slices stay as they are.
+          finishSliceRedrawChoice(null);
+          return;
+        }
+        autoSliceAiRun += 1;
+        for (const id of sliceAiControllers.keys()) cancelSliceAiRequest(id);
+      }
+
+      // ---- Per-element progress list in the AI Slice popup ----
+      const sliceProgress = new Map();
+      const SLICE_PROGRESS_LABELS = {
+        detected: "Detected",
+        checking: "Checking quality…",
+        queued: "Waiting for AI redraw 4x",
+        fixing: "Restoring hidden parts…",
+        working: "AI redraw 4x…",
+        redrawn: "Redrawn 4x",
+        fixed: "Hidden parts restored",
+        skipped: "Over the limit: use \"AI redraw 4x\" later",
+        failed: "AI redraw failed",
+        cancelled: "Cancelled",
+        ready: "Unity: ready",
+        review: "Unity: review",
+        fix: "Unity: needs fixing"
+      };
+      function resetSliceProgress() {
+        sliceProgress.clear();
+        renderSliceProgress();
+      }
+      function setSliceProgress(id, state, note = "") {
+        const previous = sliceProgress.get(id) || {};
+        sliceProgress.set(id, { ...previous, state, note, redrawn: previous.redrawn || state === "redrawn" });
+        renderSliceProgress();
+      }
+      // "AI redraw 4x · 42s": the step name plus the seconds from the slice's own progress label.
+      function busyProgressLabel(state, asset) {
+        const seconds = String(asset?.aiProcessingLabel || "").match(/(\d+s)$/)?.[1];
+        return seconds && ["working", "fixing"].includes(state) ? `${SLICE_PROGRESS_LABELS[state].replace("…", "")} · ${seconds}` : "";
+      }
+
+      function renderSliceRedrawChoice(list, entries) {
+        const choice = sliceRedrawChoice;
+        const choosable = new Set(choice.choosable);
+        backgroundDecompositionBackground.hidden = true;
+        backgroundDecompositionStartRedraw.hidden = false;
+        backgroundDecompositionStartRedraw.disabled = choice.selected.size === 0;
+        backgroundDecompositionStartRedraw.textContent = `AI redraw selected (${choice.selected.size})`;
+        list.innerHTML = `
+          <li class="slice-progress-summary slice-progress-choice">
+            <span>${choice.selected.size} of ${choice.choosable.length} selected</span>
+            <span class="slice-progress-choice-actions">
+              <button class="slice-progress-toggle-all" type="button" data-pick="suggested">Suggested</button>
+              <button class="slice-progress-toggle-all" type="button" data-pick="all">All</button>
+              <button class="slice-progress-toggle-all" type="button" data-pick="none">None</button>
+            </span>
+          </li>
+          ${entries.filter(([id]) => choosable.has(id)).map(([id, item]) => {
+            const asset = getActiveSliceAsset(id);
+            const checked = choice.selected.has(id);
+            const label = (item.state !== "redrawn" && (item.redrawn || asset?.aiUpscaled) ? "Redrawn 4x · " : "") + (SLICE_PROGRESS_LABELS[item.state] || item.state);
+            const issues = (asset?.handoffCheck?.issues || []).map((issue) => issue.message).join("\n");
+            return `<li class="slice-progress-item pickable state-${item.state}${checked ? " picked" : ""}" data-slice-id="${escapeHtml(id)}" title="${escapeHtml(issues)}">
+              <span class="slice-progress-icon"><input type="checkbox" data-redraw-pick="${escapeHtml(id)}"${checked ? " checked" : ""} aria-label="Redraw ${escapeHtml(asset?.name || id)}" /></span>
+              ${asset?.dataUrl ? `<img class="slice-progress-thumb" src="${asset.dataUrl}" alt="" />` : `<span class="slice-progress-thumb"></span>`}
+              <span class="slice-progress-name">${escapeHtml(asset?.name || item.name || id)}</span>
+              <span class="slice-progress-state">${escapeHtml(label)}</span>
+            </li>`;
+          }).join("")}`;
+      }
+
+      function toggleSliceRedrawPick(id, checked) {
+        const choice = sliceRedrawChoice;
+        if (!choice || !choice.choosable.includes(id)) return;
+        if (checked ?? !choice.selected.has(id)) choice.selected.add(id);
+        else choice.selected.delete(id);
+        renderSliceProgress();
+      }
+
+      function renderSliceProgress() {
+        const list = backgroundDecompositionProgressList;
+        if (!list) return;
+        const card = list.closest(".editable-preview-loading-card");
+        card?.classList.toggle("with-slice-progress", sliceProgress.size > 0);
+        list.hidden = sliceProgress.size === 0;
+        if (!sliceProgress.size) {
+          list.innerHTML = "";
+          backgroundDecompositionBackground.hidden = true;
+          return;
+        }
+        const entries = [...sliceProgress.entries()];
+        if (sliceRedrawChoice) {
+          renderSliceRedrawChoice(list, entries);
+          return;
+        }
+        const finished = entries.filter(([, item]) => ["redrawn", "fixed", "ready", "review", "fix", "failed", "skipped", "cancelled"].includes(item.state)).length;
+        const working = entries.filter(([, item]) => ["working", "fixing", "checking"].includes(item.state)).length;
+        backgroundDecompositionBackground.hidden = !working;
+        list.innerHTML = `
+          <li class="slice-progress-summary">${finished} / ${entries.length} done · AI redraw runs up to ${AUTO_UPSCALE_CONCURRENCY} at a time${working > 1 ? ` (${working} running now)` : ""}</li>
+          ${entries.map(([id, item]) => {
+            const asset = getActiveSliceAsset(id);
+            const busy = ["working", "fixing", "checking"].includes(item.state);
+            const icon = busy ? `<span class="slice-progress-spinner" aria-hidden="true"></span>`
+              : ["redrawn", "fixed", "ready"].includes(item.state) ? "✓"
+                : item.state === "review" ? "!"
+                  : ["fix", "failed"].includes(item.state) ? "✕"
+                    : "•";
+            const label = busyProgressLabel(item.state, asset) || SLICE_PROGRESS_LABELS[item.state] || item.state;
+            const prefix = item.redrawn && ["ready", "review", "fix"].includes(item.state) ? "Redrawn 4x · " : "";
+            return `<li class="slice-progress-item state-${item.state}${busy ? " busy" : ""}" data-slice-id="${escapeHtml(id)}">
+              <span class="slice-progress-icon">${icon}</span>
+              ${asset?.dataUrl ? `<img class="slice-progress-thumb" src="${asset.dataUrl}" alt="" />` : `<span class="slice-progress-thumb"></span>`}
+              <span class="slice-progress-name" title="${escapeHtml(item.note || "")}">${escapeHtml(asset?.name || item.name || id)}</span>
+              <span class="slice-progress-state">${escapeHtml(prefix + label)}</span>
+            </li>`;
+          }).join("")}`;
+        const current = list.querySelector(".slice-progress-item.busy");
+        if (current && !list.dataset.userScrolled) current.scrollIntoView({ block: "nearest" });
+      }
+
+      async function readImagePixels(dataUrl, maxSide = Infinity) {
+        const image = await loadImageElement(dataUrl);
+        const naturalWidth = image.naturalWidth || image.width;
+        const naturalHeight = image.naturalHeight || image.height;
+        const scale = Math.min(1, maxSide / Math.max(naturalWidth, naturalHeight));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(naturalHeight * scale));
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        return { pixels: context.getImageData(0, 0, canvas.width, canvas.height).data, width: canvas.width, height: canvas.height, naturalWidth, naturalHeight };
+      }
+
+      // Colors on the outer ring of the opaque crop: the background around the slice in the original image.
+      async function readOutsideColors(dataUrl) {
+        if (!dataUrl) return [];
+        const { pixels, width, height } = await readImagePixels(dataUrl, 256);
+        const colors = [];
+        const take = (x, y) => {
+          const index = (y * width + x) * 4;
+          if (pixels[index + 3] >= 200) colors.push([pixels[index], pixels[index + 1], pixels[index + 2]]);
+        };
+        const step = Math.max(1, Math.round((width + height) / 64));
+        for (let x = 0; x < width; x += step) { take(x, 0); take(x, height - 1); }
+        for (let y = 0; y < height; y += step) { take(0, y); take(width - 1, y); }
+        return colors;
+      }
+
+      // The artist's hand-off check (see assessSliceHandoff), stored on the slice and shown in the slice list.
+      async function checkSliceForHandoff(asset) {
+        if (!asset?.dataUrl || asset.svgData) {
+          if (asset) asset.handoffCheck = null;
+          return null;
+        }
+        const image = await readImagePixels(asset.dataUrl, 1024);
+        const small = await readImagePixels(asset.dataUrl, 160);
+        const blurry = measureSharpness(small.pixels, small.width, small.height).blurry;
+        const result = assessSliceHandoff(image.pixels, image.width, image.height, {
+          scale: image.naturalWidth / Math.max(1, asset.placement.width),
+          screenShortSide: Math.min(asset.placement.width, asset.placement.height),
+          smallSide: SMALL_SLICE_SIDE,
+          blurry,
+          recreated: Boolean(asset.aiUpscaled),
+          outsideColors: asset.aiUpscaled ? [] : await readOutsideColors(asset.originalDataUrl)
+        });
+        asset.handoffCheck = result;
+        return result;
+      }
+
+      async function checkSlicesForHandoff(assets, { announce = false } = {}) {
+        const counts = { ready: 0, check: 0, fix: 0 };
+        for (const asset of assets) {
+          const current = getActiveSliceAsset(asset.id);
+          if (!current) continue;
+          try {
+            const result = await checkSliceForHandoff(current);
+            if (!result) continue;
+            counts[result.status] += 1;
+            const state = sliceProgress.get(current.id)?.state;
+            if (sliceProgress.has(current.id) && !["failed", "cancelled", "skipped"].includes(state)) {
+              setSliceProgress(current.id, result.status === "check" ? "review" : result.status, result.issues.map((issue) => issue.message).join("\n"));
+            }
+          } catch (error) {
+            console.warn(`Hand-off check failed for ${asset.name}`, error);
+          }
+        }
+        renderCutModules(currentManifest);
+        scheduleWorkspaceDraftSave();
+        if (announce && counts.ready + counts.check + counts.fix > 0) {
+          setStatus(
+            `Unity hand-off check: ${counts.ready} ready, ${counts.check} to review, ${counts.fix} need fixing.${upscaleSkippedCount ? ` ${upscaleSkippedCount} more were over the limit of ${AUTO_UPSCALE_LIMIT}: use "AI redraw 4x" in their Transparent menu.` : ""} Hover a slice's check for details.`,
+            counts.fix ? "warning" : "success"
+          );
+        }
+        return counts;
+      }
+
+      // Raster slices that fail the hand-off check are recreated by the image model at 4x from the original crop on a
+      // key color (server: asset-upscale.js). Each Codex call costs quota and 30-100 s, so at most AUTO_UPSCALE_LIMIT.
+      async function planSliceUpscales(assets, run) {
+        upscaleSkippedCount = 0;
+        if (!assets.length || !hasConfiguredTaskAccess("generation")) return [];
+        const candidates = [];
+        for (const asset of assets) {
+          if (run !== autoSliceAiRun) return [];
+          const current = getActiveSliceAsset(asset.id);
+          if (!current || current.svgData || current.aiProcessing || !current.dataUrl) continue;
+          if (current.aiUpscaled) {
+            if (sliceProgress.has(current.id)) setSliceProgress(current.id, "redrawn");
+            continue;
+          }
+          if (sliceProgress.has(current.id)) setSliceProgress(current.id, "checking");
+          try {
+            const result = await checkSliceForHandoff(current);
+            // "Needs fixing" is always redrawn; "review" only for small elements (a big background that merely
+            // touches its box is left alone).
+            const small = Math.min(current.placement.width, current.placement.height) < SMALL_SLICE_SIDE;
+            if (result && (result.status === "fix" || (result.status === "check" && small))) {
+              candidates.push({ id: current.id, area: current.placement.width * current.placement.height });
+            } else if (sliceProgress.has(current.id)) {
+              setSliceProgress(current.id, result?.status === "check" ? "review" : "ready");
+            }
+          } catch (error) {
+            console.warn(`Hand-off check failed for ${asset.name}`, error);
+            if (sliceProgress.has(current.id)) setSliceProgress(current.id, "detected");
+          }
+        }
+        candidates.forEach((item) => {
+          if (!sliceProgress.has(item.id)) return;
+          const status = getActiveSliceAsset(item.id)?.handoffCheck?.status;
+          setSliceProgress(item.id, status === "check" ? "review" : "fix");
+        });
+        return candidates;
+      }
+
+      // Smallest first (small icons and text look worst at 1x), at most AUTO_UPSCALE_LIMIT; the rest are marked skipped.
+      function buildUpscaleQueue(ids) {
+        const items = ids.map((id) => getActiveSliceAsset(id)).filter(Boolean)
+          .map((asset) => ({ id: asset.id, area: asset.placement.width * asset.placement.height }))
+          .sort((a, b) => a.area - b.area);
+        const queue = items.slice(0, AUTO_UPSCALE_LIMIT);
+        upscaleSkippedCount = items.length - queue.length;
+        queue.forEach((item) => sliceProgress.has(item.id) && setSliceProgress(item.id, "queued"));
+        items.slice(AUTO_UPSCALE_LIMIT).forEach((item) => sliceProgress.has(item.id) && setSliceProgress(item.id, "skipped"));
+        return queue;
+      }
+
+      // Pauses with a tick box on every slice in the AI Slice popup: the ones that failed the check are ticked; the
+      // user changes the ticks and starts the redraw. Without the popup on screen (Run in background), the
+      // suggestion is used as is. Resolves to the ticked ids, or null when the user skips the redraw.
+      let sliceRedrawChoice = null;
+      function chooseSliceUpscales(assets, candidates, run) {
+        const suggested = candidates.map((item) => item.id);
+        if (run !== autoSliceAiRun || !backgroundDecompositionLoadingDialog.classList.contains("open")) return Promise.resolve(suggested);
+        const choosable = assets.map((asset) => getActiveSliceAsset(asset.id))
+          .filter((asset) => asset && !asset.svgData && asset.dataUrl && sliceProgress.has(asset.id))
+          .map((asset) => asset.id);
+        if (!choosable.length) return Promise.resolve(suggested);
+        return new Promise((resolve) => {
+          sliceRedrawChoice = { selected: new Set(suggested), suggested: new Set(suggested), choosable, resolve };
+          backgroundDecompositionLoadingDialog.dataset.state = "choose";
+          backgroundDecompositionLoadingDescription.textContent = "Tick the slices to redraw with AI at 4x. The ones that are not ready for Unity are ticked for you.";
+          backgroundDecompositionLoadingCancel.textContent = "Skip redraw";
+          backgroundDecompositionLoadingCancel.disabled = false;
+          renderSliceProgress();
+        });
+      }
+
+      function finishSliceRedrawChoice(ids) {
+        const choice = sliceRedrawChoice;
+        if (!choice) return;
+        sliceRedrawChoice = null;
+        delete backgroundDecompositionLoadingDialog.dataset.state;
+        backgroundDecompositionStartRedraw.hidden = true;
+        backgroundDecompositionLoadingCancel.textContent = "Cancel";
+        backgroundDecompositionLoadingDescription.textContent = ids?.length
+          ? `Redrawing ${ids.length} slice${ids.length > 1 ? "s" : ""} with AI at ${AUTO_UPSCALE_SCALE}x…`
+          : "No slices to redraw.";
+        choice.resolve(ids);
+      }
+
+
+      // Up to AUTO_UPSCALE_CONCURRENCY redraws at once (each Codex run mostly waits on the model, so three at a time
+      // take about a third of the time). A failure or Cancel stops new ones from starting; running ones finish.
+      async function runSliceUpscales(queue, run) {
+        const pending = [...queue];
+        const attempts = new Map();
+        let limit = Math.min(AUTO_UPSCALE_CONCURRENCY, pending.length);
+        let active = 0;
+        let done = 0;
+        let stopped = false;
+        const report = () => setStatus(`AI is redrawing slices at ${AUTO_UPSCALE_SCALE}x: ${done} / ${queue.length} done, ${active} running`, "info");
+        const worker = async () => {
+          while (!stopped && pending.length) {
+            if (run !== autoSliceAiRun) {
+              stopped = true;
+              break;
+            }
+            // After a rate limit, extra workers stop so fewer run at once.
+            if (active >= limit) return;
+            const item = pending.shift();
+            const asset = getActiveSliceAsset(item.id);
+            if (!asset || asset.aiProcessing) continue;
+            active += 1;
+            setSliceProgress(item.id, "working");
+            report();
+            const ok = await makeSliceAiUpscale(item.id, { background: true });
+            active -= 1;
+            if (ok) {
+              done += 1;
+              setSliceProgress(item.id, "redrawn");
+            } else if (run !== autoSliceAiRun) {
+              setSliceProgress(item.id, "cancelled");
+              stopped = true;
+            } else if (/rate.?limit|429|too many|usage limit|capacity|overloaded|try again/i.test(getActiveSliceAsset(item.id)?.lastAiError || "") && (attempts.get(item.id) || 0) < 2) {
+              // The account is busy: one worker fewer, and this slice goes back in the queue.
+              attempts.set(item.id, (attempts.get(item.id) || 0) + 1);
+              limit = Math.max(1, limit - 1);
+              pending.push(item);
+              setSliceProgress(item.id, "queued");
+              await new Promise((resolve) => setTimeout(resolve, 5000));
+            } else {
+              done += 1;
+              setSliceProgress(item.id, "failed");
+              // A broken CLI should not burn through every slice.
+              stopped = true;
+            }
+            report();
+          }
+        };
+        await Promise.all(Array.from({ length: limit }, worker));
+        pending.forEach((rest) => sliceProgress.has(rest.id) && setSliceProgress(rest.id, "cancelled"));
+      }
+
+      // The AI completion step leaves the raw model output as a second slice of the same element; only one is kept.
+      function dropAiRawSiblings(asset) {
+        const activeImage = getActiveResultImage();
+        const groupId = asset?.aiInpaintResultGroupId;
+        if (!activeImage?.sliceManifest?.assets || !groupId) return;
+        const removed = activeImage.sliceManifest.assets.filter((other) => other !== asset && other.aiInpaintResultGroupId === groupId && !other.aiProcessing);
+        if (!removed.length) return;
+        activeImage.sliceManifest.assets = activeImage.sliceManifest.assets.filter((other) => !removed.includes(other));
+        for (const other of removed) {
+          selectedSliceIds.delete(other.id);
+          sliceCropVersions.delete(other.id);
+          if (activeSliceId === other.id) activeSliceId = asset.id;
+        }
+        delete asset.aiInpaintResultGroupId;
+        delete asset.aiInpaintResultRole;
+      }
+
+      // Slices painted after this one that lie mostly inside it (buttons on a panel, a label on a button), in the
+      // slice's own pixels. The redraw leaves them out instead of drawing slots where they sit.
+      function getSlicesDrawnOver(asset) {
+        const assets = getActiveResultImage()?.sliceManifest?.assets || [];
+        const own = asset.placement;
+        const ownArea = own.width * own.height;
+        return assets.slice(assets.indexOf(asset) + 1).filter((other) => {
+          const box = other.placement;
+          if (!box || other === asset) return false;
+          const overlapWidth = Math.min(own.x + own.width, box.x + box.width) - Math.max(own.x, box.x);
+          const overlapHeight = Math.min(own.y + own.height, box.y + box.height) - Math.max(own.y, box.y);
+          if (overlapWidth <= 0 || overlapHeight <= 0) return false;
+          const area = box.width * box.height;
+          return overlapWidth * overlapHeight >= area * 0.6 && area < ownArea * 0.9;
+        }).map((other) => ({
+          name: other.name,
+          x: other.placement.x - own.x,
+          y: other.placement.y - own.y,
+          width: other.placement.width,
+          height: other.placement.height
+        }));
+      }
+
+      // Redraws one slice at 4x on a key color (server: asset-upscale.js). The result keeps its high resolution:
+      // the slice keeps its place and size, so Figma and exports at 2x/3x stay crisp. The previous image is restorable.
+      async function makeSliceAiUpscale(id, { background = false } = {}) {
+        const asset = getActiveSliceAsset(id);
+        if (!asset || asset.aiProcessing || asset.svgData) return false;
+        const label = `AI redraw at ${AUTO_UPSCALE_SCALE}x`;
+        if (!background) setBusy(true, `${label}: ${asset.name}`, true);
+        setSliceAiProcessing(asset, `${label} · 0s`, true);
+        const progressId = createAiProgressId("upscale");
+        const controller = beginSliceAiRequest(asset, progressId);
+        const stopProgress = startAiProgressPolling(progressId, (progress) => updateSliceAiProgress(asset, progress, label));
+        try {
+          const response = await fetchBackend("/api/assets/ai-redraw", {
+            method: "POST",
+            signal: controller.signal,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              mode: "upscale",
+              // The cut-out from slicing, not an earlier redraw, so a redo does not copy the earlier result's mistakes.
+              layerDataUrl: asset.layerTransparentDataUrl || asset.dataUrl,
+              dataUrl: asset.originalDataUrl || asset.dataUrl,
+              name: asset.name,
+              width: asset.placement.width,
+              height: asset.placement.height,
+              scale: AUTO_UPSCALE_SCALE,
+              covers: getSlicesDrawnOver(asset),
+              progressId,
+              quality: "high"
+            })
+          });
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(result.error || `AI upscale request failed: ${response.status}`);
+          const image = result.images && result.images[0];
+          if (!image?.dataUrl) throw new Error("AI upscale returned no image");
+          recordSliceHistory();
+          applySliceTransparencyResult(asset, { dataUrl: image.dataUrl, ai: true });
+          asset.aiUpscaled = true;
+          asset.lastAiError = "";
+          asset.name = asset.name.replace(/_(?:local_composite|ai_original)$/, "");
+          dropAiRawSiblings(asset);
+          normalizeSliceAssetNames(getActiveResultImage().sliceManifest.assets);
+          await checkSliceForHandoff(asset).catch(() => null);
+          refreshSliceVisibility();
+          renderCutModules(currentManifest);
+          scheduleWorkspaceDraftSave();
+          if (!background) setStatus(`Redrew ${asset.name} at ${AUTO_UPSCALE_SCALE}x. The previous image is kept.`, "success");
+          return true;
+        } catch (error) {
+          asset.lastAiError = error?.message || String(error);
+          if (error?.name !== "AbortError") setStatus(`AI upscale failed for ${asset.name}: ${asset.lastAiError}`, "error");
+        } finally {
+          stopProgress();
+          finishSliceAiRequest(asset, controller);
+          setSliceAiProcessing(asset, "", false);
+          if (!background) releaseBusyIfIdle();
+        }
+        return false;
+      }
+
+      // Slices whose hidden parts were guessed locally are redone by the image model when one is set up
+      // (for example cli://codex); the local guess stays restorable. Runs in the background after AI Slice.
+      async function fixRebuiltSlicesWithAi(assets, run = autoSliceAiRun) {
+        if (!assets.length || !hasConfiguredTaskAccess("inpaint")) return;
+        for (const [index, asset] of assets.entries()) {
+          if (run !== autoSliceAiRun) return;
+          if (!getActiveSliceAsset(asset.id)) continue;
+          const { name, layerTransparentDataUrl } = asset;
+          setStatus(`AI is fixing slice ${index + 1} / ${assets.length}: ${name}`, "info");
+          if (sliceProgress.has(asset.id)) setSliceProgress(asset.id, "fixing");
+          await makeSliceAiComplete(asset.id, [asset.rebuiltRegion]);
+          const fixed = getActiveSliceAsset(asset.id);
+          if (sliceProgress.has(asset.id)) setSliceProgress(asset.id, fixed?.aiCompleted ? "fixed" : "failed");
+          if (!fixed?.aiCompleted) continue;
+          // Keep only the fixed slice: the raw model output is removed instead of left as a second slice.
+          dropAiRawSiblings(fixed);
+          // The model only repaints colors: the layer keeps the shape found when it was separated, and its name.
+          applySliceTransparencyResult(fixed, { dataUrl: await applyAlphaFrom(fixed.dataUrl, layerTransparentDataUrl), ai: false });
+          fixed.name = name;
+          normalizeSliceAssetNames(getActiveResultImage().sliceManifest.assets);
+          renderCutModules(currentManifest);
+          scheduleWorkspaceDraftSave();
+        }
+        hideStatus();
+      }
+
+      async function applyAlphaFrom(dataUrl, alphaDataUrl) {
+        const image = await loadImageElement(dataUrl);
+        const canvas = document.createElement("canvas");
+        canvas.width = image.naturalWidth || image.width;
+        canvas.height = image.naturalHeight || image.height;
+        const context = canvas.getContext("2d");
+        context.drawImage(image, 0, 0);
+        context.globalCompositeOperation = "destination-in";
+        context.drawImage(await loadImageElement(alphaDataUrl), 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL("image/png");
+      }
+
+      function hasConfiguredTaskAccess(task) {
+        const configId = modelConfigState.taskRouting[task];
+        return modelConfigState.modelConfigs.some((config) => (
           config.id === configId
-          && config.tasks.includes("vision")
+          && config.tasks.includes(task)
           && String(config.model || "").trim()
           && (config.hasApiKey || /^cli:\/\//i.test(config.baseUrl || ""))
-        )));
+        ));
+      }
+
+      function hasConfiguredVisionAccess() {
+        return hasConfiguredTaskAccess("vision");
       }
 
       function toggleImportHelp(button) {
@@ -19977,6 +22024,162 @@ if (typeof module !== "undefined") {
         return result;
       }
 
+      async function enterRepairPreview(activeImage) {
+        const card = resultGrid.querySelector(".result-card.slice-mode");
+        const image = card?.querySelector(".result-canvas img");
+        const layer = card?.querySelector(".slice-layer");
+        if (!image || !layer) return false;
+        repairPreviewButton.disabled = true;
+        setStatus(typeof t === "function" ? t("status_repair_preview_generating", "Generating inpaint preview...") : "Generating inpaint preview...");
+        try {
+          image.src = await createRepairedPreviewImage(activeImage);
+          repairPreviewActive = true;
+          layer.hidden = false;
+          renderSliceOverlay(card, layer, image);
+          repairPreviewButton.textContent = typeof t === "function" ? t("btn_exit_preview", "Exit Inpaint Preview") : "Exit Inpaint Preview";
+          return true;
+        } catch (error) {
+          setStatus(`Failed to generate completion preview: ${error.message || String(error)}`, "error");
+          return false;
+        } finally {
+          repairPreviewButton.disabled = false;
+        }
+      }
+
+      // A slice that fully contains other slices (a button around its icon) is re-cropped with those slices patched out,
+      // so the icon is not duplicated in the button image. Only untouched AI crops are changed.
+      async function patchContainedSlicesOut(activeImage, outerAssets) {
+        const allAssets = activeImage.sliceManifest.assets;
+        for (const outer of outerAssets) {
+          if (
+            outer.source !== "ai-bbox"
+            || outer.innerSlicesPatched
+            || outer.transparent
+            || outer.aiCompleted
+            || outer.aiRedrawn
+            || outer.svgData
+          ) continue;
+          const inners = allAssets.filter((asset) => asset !== outer && slicePlacementContains(outer.placement, asset.placement));
+          if (inners.length === 0) continue;
+          const { x, y, width, height } = outer.placement;
+          const source = await loadImageElement(activeImage.dataUrl);
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const context = canvas.getContext("2d");
+          context.drawImage(source, x, y, width, height, 0, 0, width, height);
+          for (const inner of inners) {
+            if (!inner.repairDataUrl) {
+              Object.assign(inner, await createSliceRepairPatch(activeImage.dataUrl, inner.placement));
+            }
+            const repair = await loadImageElement(inner.repairDataUrl);
+            context.drawImage(repair, inner.placement.x - x, inner.placement.y - y, inner.placement.width, inner.placement.height);
+          }
+          outer.originalDataUrl = canvas.toDataURL("image/png");
+          outer.dataUrl = outer.originalDataUrl;
+          outer.innerSlicesPatched = true;
+        }
+        renderCutModules(currentManifest);
+        scheduleWorkspaceDraftSave();
+      }
+
+      // Separates new AI slices from each other in paint order (array order, back to front): parts hidden by slices
+      // in front are rebuilt, and the background and slices behind are made transparent. See slice-layer-isolation.js.
+      // Returns the new slices that turned out to be plain background (boxes that only grouped other slices).
+      async function isolateDetectedSliceLayers(activeImage, newAssets) {
+        const assets = activeImage.sliceManifest.assets;
+        const source = await loadImageElement(activeImage.dataUrl);
+        const width = source.naturalWidth || source.width;
+        const height = source.naturalHeight || source.height;
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        context.drawImage(source, 0, 0);
+        const results = isolateSliceLayers(
+          context.getImageData(0, 0, width, height).data,
+          width,
+          height,
+          assets.map((asset) => ({ placement: asset.placement, shape: asset.shape || "free", kind: asset.kind }))
+        );
+        const toDataUrl = (pixels, placement) => {
+          const crop = document.createElement("canvas");
+          crop.width = placement.width;
+          crop.height = placement.height;
+          crop.getContext("2d").putImageData(new ImageData(pixels, placement.width, placement.height), 0, 0);
+          return crop.toDataURL("image/png");
+        };
+        const backgroundOnly = [];
+        for (const asset of newAssets) {
+          const result = results[assets.indexOf(asset)];
+          if (!result) continue;
+          if (result.backgroundOnly) {
+            backgroundOnly.push(asset);
+            continue;
+          }
+          asset.originalDataUrl = toDataUrl(result.opaque, asset.placement);
+          asset.dataUrl = asset.originalDataUrl;
+          asset.innerSlicesPatched = true;
+          asset.layerTransparentDataUrl = toDataUrl(result.pixels, asset.placement);
+          // A slice with a sizeable part guessed under other slices is redone by the image model afterwards.
+          asset.rebuiltRegion = result.rebuiltRatio >= 0.1 && result.rebuiltRegion?.width >= 8 && result.rebuiltRegion?.height >= 8
+            ? result.rebuiltRegion
+            : null;
+          applySliceTransparencyResult(asset, { dataUrl: asset.layerTransparentDataUrl, ai: false });
+        }
+        return backgroundOnly;
+      }
+
+      // Local alternative to AI background restore: patch every slice out with Preview Inpaint, then crop each background.
+      async function generateLocalFullBackgrounds() {
+        const activeImage = getActiveResultImage();
+        const review = activeImage
+          ? getCachedBackgroundDecomposition(activeImage.backgroundDecompositionCache, activeImage)
+          : null;
+        const backgrounds = (review?.backgrounds || []).filter((background) => background.enabled);
+        if (!activeImage || backgrounds.length === 0 || uiBusy) {
+          setStatus("Run AI Slice first to detect a background container.", "warning");
+          return;
+        }
+        genFullBackgroundButton.disabled = true;
+        try {
+          ensureImageSliceState(activeImage);
+          const overlayAssets = getMissingOverlaySliceCandidates(review, activeImage.sliceManifest.assets);
+          if (overlayAssets.length > 0) {
+            await appendDetectedSliceAssets(activeImage, overlayAssets, createAiProgressId("overlay_slices"));
+          }
+          await patchContainedSlicesOut(activeImage, activeImage.sliceManifest.assets);
+          if (repairPreviewActive && overlayAssets.length > 0) {
+            const previewImage = resultGrid.querySelector(".result-card.slice-mode .result-canvas img");
+            if (previewImage) previewImage.src = await createRepairedPreviewImage(activeImage);
+          } else if (!repairPreviewActive && !(await enterRepairPreview(activeImage))) {
+            return;
+          }
+          const backgroundAssets = [];
+          for (const background of backgrounds) {
+            backgroundAssets.push(await addSliceAsset(background.bbox, background.name));
+          }
+          await applyLocalTransparency(backgroundAssets.filter(Boolean));
+          renderCutModules(currentManifest);
+          scheduleWorkspaceDraftSave();
+          setStatus(`Added ${backgrounds.length} full background slice(s) from the inpaint preview.`, "success");
+        } catch (error) {
+          setStatus(`Full background failed: ${error.message || String(error)}`, "error");
+        } finally {
+          genFullBackgroundButton.disabled = false;
+        }
+      }
+
+      // The smallest other slice that fully contains this one, used to nest layers on import.
+      function findContainingSliceId(asset, assets) {
+        let best = null;
+        for (const other of assets) {
+          if (other === asset || other.id === asset.id || !slicePlacementContains(other.placement, asset.placement)) continue;
+          if (!best || other.placement.width * other.placement.height < best.placement.width * best.placement.height) best = other;
+        }
+        return best?.id || null;
+      }
+
       async function createRepairedPreviewImage(activeImage) {
         const assets = activeImage?.sliceManifest?.assets || [];
         if (!activeImage?.dataUrl) return "";
@@ -19994,24 +22197,22 @@ if (typeof module !== "undefined") {
 
         if (assets.length === 0) return canvas.toDataURL("image/png");
 
+        // Fill exactly the pixels the slices show (their alpha, not their boxes), so nothing shows around round slices.
+        const maskCanvas = document.createElement("canvas");
+        maskCanvas.width = width;
+        maskCanvas.height = height;
+        const maskContext = maskCanvas.getContext("2d", { willReadFrequently: true });
         for (const asset of assets) {
-          if (!asset.repairDataUrl) {
-            Object.assign(asset, await createSliceRepairPatch(activeImage.dataUrl, asset.placement));
-          }
-          const repair = await loadImageElement(asset.repairDataUrl);
-          context.drawImage(
-            repair,
-            0,
-            0,
-            repair.naturalWidth || repair.width,
-            repair.naturalHeight || repair.height,
-            asset.placement.x,
-            asset.placement.y,
-            asset.placement.width,
-            asset.placement.height
-          );
+          if (!asset.dataUrl) continue;
+          const image = await loadImageElement(asset.dataUrl);
+          maskContext.drawImage(image, asset.placement.x, asset.placement.y, asset.placement.width, asset.placement.height);
         }
-
+        const maskPixels = maskContext.getImageData(0, 0, width, height).data;
+        const mask = new Uint8Array(width * height);
+        for (let pixel = 0; pixel < mask.length; pixel += 1) mask[pixel] = maskPixels[pixel * 4 + 3] > 0 ? 1 : 0;
+        const imageData = context.getImageData(0, 0, width, height);
+        inpaintMaskedImage(imageData.data, width, height, mask);
+        context.putImageData(imageData, 0, 0);
         return canvas.toDataURL("image/png");
       }
 
@@ -20579,6 +22780,8 @@ if (typeof module !== "undefined") {
         modelConfigPurposeInputs.forEach((input) => {
           input.checked = input.value === purpose;
         });
+        const baseUrl = modelConfigBaseUrlInput.value.toLowerCase();
+        applyModelConfigSource(baseUrl.startsWith("cli://") ? baseUrl : "api", { resetValues: false });
         modelConfigDeleteButton.hidden = !config;
         applyModelConfigTestButtonState(modelConfigTestButton, config);
         closeEditedModelConfigOptions();
@@ -20593,6 +22796,33 @@ if (typeof module !== "undefined") {
         modelConfigDialog.classList.add("open");
         modelConfigDialog.setAttribute("aria-hidden", "false");
         modelConfigNameInput.focus();
+      }
+
+      // CLI configs need no key; Claude and Gemini CLIs only read images, Codex CLI can also generate them.
+      function applyModelConfigSource(source, { resetValues }) {
+        const isCli = source !== "api";
+        const visionOnly = isCli && source !== "cli://codex";
+        modelConfigSourceInputs.forEach((input) => {
+          input.checked = input.value === source;
+        });
+        modelConfigBaseUrlInput.closest("label").hidden = isCli;
+        modelConfigApiKeyInput.closest("label").hidden = isCli;
+        modelConfigCliHint.hidden = !isCli;
+        const visionInput = modelConfigPurposeInputs.find((input) => input.value === "vision");
+        const imageInput = modelConfigPurposeInputs.find((input) => input.value === "image");
+        imageInput.disabled = visionOnly;
+        if (visionOnly && imageInput.checked) {
+          visionInput.checked = true;
+          visionInput.dispatchEvent(new Event("change"));
+        }
+        if (!resetValues) return;
+        if (isCli) {
+          modelConfigBaseUrlInput.value = source;
+          modelConfigModelInput.value = "default";
+        } else if (/^cli:\/\//i.test(modelConfigBaseUrlInput.value)) {
+          modelConfigBaseUrlInput.value = "https://api.openai.com";
+          modelConfigModelInput.value = getModelPurposeDefaults(editingModelConfigPurpose).model;
+        }
       }
 
       function closeModelConfigEditor() {

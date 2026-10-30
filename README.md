@@ -38,7 +38,7 @@ npm install
 npm run api            # local service on http://127.0.0.1:18787
 ```
 
-On Windows you can double-click `deploy-environment.bat` (macOS: `deploy-environment.command`) to install and start everything. Keep the service window open while you use the plugin.
+On Windows double-click `menu.bat` and choose **1. Set up and start** to install and start everything (macOS: `deploy-environment.command`). Keep the service window open while you use the plugin.
 
 ### Use it in Figma Desktop
 
@@ -129,7 +129,7 @@ Install and log in to [Claude Code](https://docs.claude.com/en/docs/claude-code)
 Figma Desktop / browser
 ├─ UI (src/ui)                 canvas, slicing, previews, state, API client
 ├─ Plugin main (src/plugin)    Figma API: node creation, import, frame serialization
-└─ Local API (server.js + src/server)
+└─ Local API (src/server, entry src/server/index.js)
    ├─ model configs, OpenAI-compatible and CLI providers
    ├─ generation, editing, transparency, SVG, background restoration
    ├─ progress, workspace drafts, thumbnails
@@ -155,7 +155,7 @@ npm test           # unit tests + syntax checks
 npm run preview    # http://127.0.0.1:4173/figma-sim.html, a simulated Figma canvas
 ```
 
-Working rules live in [STANDARDS.md](STANDARDS.md), the branch flow in [GITFLOW.md](GITFLOW.md), and the current state of the work in [HANDOFFS.md](HANDOFFS.md). CI runs build and tests on every push to `main` and `dev/Hieuthu3`.
+Agent rules are in [AGENTS.md](AGENTS.md), working rules in [standards/](standards/README.md) (branch flow: [standards/git-flow.md](standards/git-flow.md)), the product overview in [docs/project-context.md](docs/project-context.md), and the state of the work in [handoff/](handoff/README.md), one folder per session. CI runs build and tests on every push to `main` and `dev/Hieuthu3`.
 
 ## Local data and security
 

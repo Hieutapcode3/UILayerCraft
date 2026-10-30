@@ -181,7 +181,7 @@ test("AI decomposition is the single entry for ordinary slices and background re
   assert.doesNotMatch(appSource, /fetchBackend\("\/api\/design\/detect-slice-assets"/);
   assert.match(appSource, /const detectedAssets = Array\.isArray\(result\.assets\)[\s\S]*appendDetectedSliceAssets\(\s*activeImage,\s*detectedAssets/);
   assert.match(appSource, /response\.status === 404/);
-  assert.match(appSource, /The local service is outdated. Close it and run the deploy-environment script again/);
+  assert.match(appSource, /The local service is outdated. Close it and start it again from menu\.bat \(or deploy-environment\.command\)/);
   assert.match(appSource, /createBackgroundDecompositionReview/);
   assert.match(appSource, /updateDecompositionBackground/);
   assert.match(appSource, /toggleDecompositionOverlay/);
@@ -277,7 +277,7 @@ test("startup gate stays visible until health and config both load successfully"
 });
 
 test("local API exposes the health endpoint used by the startup gate", () => {
-  const serverSource = fs.readFileSync("server.js", "utf8");
+  const serverSource = fs.readFileSync("src/server/index.js", "utf8");
   assert.match(serverSource, /request\.method === "GET" && request\.url === "\/health"/);
   assert.match(serverSource, /sendJson\(response, 200, \{ ok: true \}\)/);
 });
@@ -834,7 +834,7 @@ test("AI transparent applies local edge removal after a provider compatibility f
 
 test("editable preview failures stay raw and only appear in the loading dialog", () => {
   const appSource = fs.readFileSync("src/ui/app.js", "utf8");
-  const serverSource = fs.readFileSync("server.js", "utf8");
+  const serverSource = fs.readFileSync("src/server/index.js", "utf8");
   const fastServiceSource = fs.readFileSync("src/server/services/fast-editable-html.js", "utf8");
   const previewErrorSource = appSource.match(/function showEditablePreviewLoadingError\([\s\S]*?\n      \}/)?.[0] || "";
 
@@ -863,10 +863,11 @@ test("model settings expose two purposes, OpenAI-compatible fields, and one unif
   const template = fs.readFileSync("src/ui/ui.template.html", "utf8");
   const appSource = fs.readFileSync("src/ui/app.js", "utf8");
   const rendererSource = fs.readFileSync("src/ui/renderers/model-settings.js", "utf8");
-  const serverSource = fs.readFileSync("server.js", "utf8");
+  const serverSource = fs.readFileSync("src/server/index.js", "utf8");
 
   assert.doesNotMatch(template, /data-provider="openrouter"|Test image generation|Test inpainting|Test connection|Connection type|modelConfigType/);
-  assert.doesNotMatch(`${template}\n${appSource}\n${rendererSource}\n${serverSource}`, /codexCli|Codex CLI/);
+  assert.doesNotMatch(`${template}\n${appSource}\n${rendererSource}\n${serverSource}`, /codexCli/);
+  assert.match(template, /name="modelConfigSource" value="cli:\/\/codex"/);
   assert.match(rendererSource, /data-route-picker="\$\{task\}"/);
   assert.doesNotMatch(template, /id="taskRouteGeneration"|id="taskRouteInpaint"/);
   assert.match(template, /value="vision"[^>]*\/?>Vision Model/);

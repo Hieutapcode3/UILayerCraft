@@ -7,7 +7,7 @@ const {
 } = require("../../src/server/services/fast-editable-html");
 
 test("editable HTML prompt preserves the proven 55db12d fast-mode contract", () => {
-  const serverSource = fs.readFileSync("server.js", "utf8");
+  const serverSource = fs.readFileSync("src/server/index.js", "utf8");
   const promptSource = serverSource.match(/function buildEditableDesignH5Prompt\([\s\S]*?\r?\n}\r?\n\r?\nfunction extractHtmlDocument/)?.[0] || "";
 
   assert.match(promptSource, /Highest priority:/);
